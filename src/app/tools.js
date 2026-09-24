@@ -4,6 +4,7 @@ import { initDrawTool } from '../annotations/drawTool.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { createWebcamExplorePanel } from '../ui/webcamExplore.js';
+import { createNpsNaturePanel } from '../ui/npsNature.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
@@ -104,6 +105,15 @@ export function createApplicationTools({
       if (window.__gevWebcamExplore === webcamExploreHandle)
         delete window.__gevWebcamExplore;
       data.presentation.attachWebcamExplore(null);
+    });
+  }
+  const npsNature = dataManager.layers.get('nps-nature-cameras')?.module;
+  if (npsNature) {
+    data.presentation.attachNpsNature((container) =>
+      createNpsNaturePanel({ container, layer: npsNature }),
+    );
+    defer(() => {
+      data.presentation.attachNpsNature(null);
     });
   }
   if (startChrome)

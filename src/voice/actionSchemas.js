@@ -147,6 +147,7 @@ const schemas = [
             'ca-cwwp-webcams',
             'al-algo-webcams',
             'webcam-explore',
+            'nps-nature-cameras',
           ],
         },
         enabled: {
@@ -185,6 +186,7 @@ const schemas = [
             'ca-cwwp-webcams',
             'al-algo-webcams',
             'webcam-explore',
+            'nps-nature-cameras',
           ],
         },
       },

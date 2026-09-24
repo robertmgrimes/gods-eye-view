@@ -39,6 +39,7 @@ const PANEL_GROUPS = [
       'ca-cwwp-webcams',
       'al-algo-webcams',
       'webcam-explore',
+      'nps-nature-cameras',
       'recent-imagery',
     ],
   },
@@ -86,6 +87,7 @@ const PANEL_LABELS = {
   'ca-cwwp-webcams': 'Caltrans CWWP',
   'al-algo-webcams': 'ALGO (experimental)',
   'webcam-explore': 'Webcam Explore',
+  'nps-nature-cameras': 'NPS & nature',
   'alpr-cameras': 'Mapped ALPR Cameras',
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',
@@ -145,6 +147,8 @@ export class LayerPanel {
     this._recentImageryPanel = null;
     this._webcamExploreFactory = null;
     this._webcamExplorePanel = null;
+    this._npsNatureFactory = null;
+    this._npsNaturePanel = null;
   }
   mount(container) {
     if (this._destroyed) return;
@@ -176,6 +180,22 @@ export class LayerPanel {
     const slot = this._toggleContainer?.querySelector?.('.webcam-explore-slot');
     if (slot && this._webcamExploreFactory)
       this._webcamExplorePanel = this._webcamExploreFactory(slot) || null;
+  }
+  /**
+   * Host curated NPS link-outs under the NPS & nature row.
+   * @param {((container: HTMLElement) => { destroy: () => void } | null) | null} factory
+   */
+  attachNpsNature(factory) {
+    if (this._destroyed) return;
+    this._npsNatureFactory = typeof factory === 'function' ? factory : null;
+    this._mountNpsNature();
+  }
+  _mountNpsNature() {
+    this._npsNaturePanel?.destroy();
+    this._npsNaturePanel = null;
+    const slot = this._toggleContainer?.querySelector?.('.nps-nature-slot');
+    if (slot && this._npsNatureFactory)
+      this._npsNaturePanel = this._npsNatureFactory(slot) || null;
   }
   /**
    * Host the Recent Imagery readout in its rail body, like the weather
@@ -219,6 +239,9 @@ export class LayerPanel {
     this._webcamExplorePanel?.destroy();
     this._webcamExplorePanel = null;
     this._webcamExploreFactory = null;
+    this._npsNaturePanel?.destroy();
+    this._npsNaturePanel = null;
+    this._npsNatureFactory = null;
     this._toggleContainer = null;
   }
   _renderToggles() {
@@ -226,6 +249,8 @@ export class LayerPanel {
     this._releaseBindings();
     this._webcamExplorePanel?.destroy();
     this._webcamExplorePanel = null;
+    this._npsNaturePanel?.destroy();
+    this._npsNaturePanel = null;
     this._toggleContainer.innerHTML = '';
 
     const generation = this._generation;
@@ -371,9 +396,17 @@ export class LayerPanel {
         row.appendChild(slot);
       }
 
+      if (layer.id === 'nps-nature-cameras') {
+        const slot = document.createElement('div');
+        slot.className = 'nps-nature-slot';
+        slot.hidden = !layer.enabled;
+        row.appendChild(slot);
+      }
+
       this._toggleContainer.appendChild(row);
     }
     this._mountWebcamExplore();
+    this._mountNpsNature();
     this._refreshWeatherPanel();
   }
 
@@ -560,6 +593,8 @@ export class LayerPanel {
       );
       const explore = row.querySelector('.webcam-explore-slot');
       if (explore) explore.hidden = !layer.enabled;
+      const npsNature = row.querySelector('.nps-nature-slot');
+      if (npsNature) npsNature.hidden = !layer.enabled;
     }
     this._refreshWeatherPanel();
   }

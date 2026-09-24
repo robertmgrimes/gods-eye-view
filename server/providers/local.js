@@ -30,6 +30,7 @@ import { kytcProxy } from './kytc.js';
 import { cwwpProxy } from './cwwp.js';
 import { algoProxy } from './algo.js';
 import { webcamExploreProxy } from './webcamExplore.js';
+import { npsNatureProxy } from './npsNature.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -62,6 +63,7 @@ function localProviderPlugins() {
     cwwpProxy(),
     algoProxy(),
     webcamExploreProxy(),
+    npsNatureProxy(),
     weatherProxy(),
     cycloneProxy(),
     firePerimetersProxy(),
