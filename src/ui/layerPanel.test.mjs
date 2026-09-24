@@ -45,7 +45,13 @@ test('panel presentation places KYTC next to Windy in Cameras', () => {
   );
   assert.deepEqual(
     order.filter(({ label }) => label === 'Cameras').map(({ id }) => id),
-    ['cctv', 'windy-webcams', 'ky-kytc-webcams', 'recent-imagery'],
+    [
+      'cctv',
+      'windy-webcams',
+      'ky-kytc-webcams',
+      'ca-cwwp-webcams',
+      'recent-imagery',
+    ],
   );
 });
 

@@ -3237,6 +3237,30 @@ test('KYTC names toggle only the Kentucky camera layer through the normal voice 
   }
 });
 
+test('Caltrans names toggle only the CWWP camera layer through the normal voice action', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['ca-cwwp-webcams', { module: {} }]]),
+    getAll: () => [{ id: 'ca-cwwp-webcams', name: 'Caltrans CWWP' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['ca-cwwp-webcams', 'caltrans', 'caltrans cwwp', 'california cameras', 'CWWP']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'ca-cwwp-webcams');
+      assert.deepEqual(calls.at(-1), ['ca-cwwp-webcams', value]);
+    }
+  }
+});
+
 test('ISS voice lookup uses the registered satellite instance', async () => {
   const calls = [];
   const viewer = {
