@@ -76,6 +76,11 @@ export function createKytcPopover({
     return [placeLabel, district, record.state].filter(Boolean).join(' · ');
   }
 
+  function feedLine(record) {
+    if (record.place === 'Indiana') return 'Indiana border · KYTC feed';
+    return `${record.place || 'Kentucky'} · KYTC feed`;
+  }
+
   return {
     setHandlers(next) {
       handlers = next || {};
@@ -87,15 +92,10 @@ export function createKytcPopover({
       const record = view.record || {};
       node.replaceChildren();
       node.setAttribute('aria-label', record.title || 'KYTC camera');
-      node.append(
-        header(record.title || 'KYTC camera'),
-        el(
-          doc,
-          'p',
-          'kytc-popover-meta',
-          metaLine(record) || 'Kentucky traffic camera',
-        ),
-      );
+      node.append(header(record.title || 'KYTC camera'));
+      const meta = metaLine(record);
+      if (meta) node.append(el(doc, 'p', 'kytc-popover-meta', meta));
+      node.append(el(doc, 'p', 'kytc-popover-meta', feedLine(record)));
       if (record.description && record.description !== record.title)
         node.append(el(doc, 'p', 'kytc-popover-meta', record.description));
       if (record.status)

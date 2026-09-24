@@ -13,11 +13,17 @@ import {
   parseBBox,
   parseCameraQuery,
   parseNearby,
+  parseStillIds,
   publicCamera,
   queryIntersectsService,
   sameOriginStillUrl,
   stillImageUrl,
 } from './model.js';
+import {
+  LIST_CACHE_TTL_MS,
+  STILL_FETCH_CONCURRENCY,
+  STILL_REFRESH_MS,
+} from './policy.js';
 
 const louisville = {
   attributes: {
@@ -136,6 +142,48 @@ test('a view box and a nearby circle keep only the cameras inside them', () => {
   );
   const pacific = parseBBox({ west: 170, south: -10, east: -170, north: 10 });
   assert.equal(cameraInQuery(inTown, pacific), false);
+});
+
+test('Indiana border cameras are labeled Indiana and the rest of the feed stays Kentucky', () => {
+  const indiana = publicCamera(
+    normalizeCamera({
+      attributes: {
+        OBJECTID: 1,
+        description: 'I-65 just South of I-265 Exit 6 Indiana',
+        latitude: 38.345217,
+        longitude: -85.753507,
+        snapshot: 'http://pws.trafficwise.org/pullover/172_65_56_11.jpg',
+      },
+    }),
+  );
+  const junction = publicCamera(normalizeCamera(louisville));
+  const stated = publicCamera(
+    normalizeCamera({
+      attributes: {
+        ...louisville.attributes,
+        OBJECTID: 7,
+        state: 'IN',
+        description: 'border cam',
+      },
+    }),
+  );
+  assert.equal(indiana.place, 'Indiana');
+  assert.equal(junction.place, 'Kentucky');
+  assert.equal(stated.place, 'Indiana');
+  assert.equal(indiana.snapshot, undefined);
+});
+
+test('still refresh ids stay numeric, unique, and capped', () => {
+  assert.deepEqual(parseStillIds('2, 1,2,nope,3'), ['2', '1', '3']);
+  assert.deepEqual(parseStillIds(''), []);
+  assert.deepEqual(parseStillIds(null), []);
+});
+
+test('catalog and still cadence stay inside the handoff bounds', () => {
+  assert.equal(LIST_CACHE_TTL_MS, 24 * 60 * 60 * 1000);
+  assert.ok(STILL_REFRESH_MS >= 30_000);
+  assert.ok(STILL_REFRESH_MS <= 120_000);
+  assert.equal(STILL_FETCH_CONCURRENCY, 2);
 });
 
 test('the KYTC layer share hash round-trips on the unused token 4', () => {

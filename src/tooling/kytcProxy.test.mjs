@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { kytcProxy } from '../../server/providers/kytc.js';
-import { LIST_CACHE_TTL_MS } from '../layers/kytc/policy.js';
+import { LIST_CACHE_TTL_MS, STILL_REFRESH_MS } from '../layers/kytc/policy.js';
 
 function install(plugin) {
   const routes = new Map();
@@ -252,6 +252,164 @@ test('an expired catalog is reused when KYTC fails, and a fresh one replaces it'
   now += LIST_CACHE_TTL_MS + 5;
   const fresh = json(await request(view));
   assert.equal(fresh.stale, false);
+});
+
+function jpegResponse(bytes = Uint8Array.from([0xff, 0xd8, 0xff, 0xd9])) {
+  return new Response(bytes, {
+    status: 200,
+    headers: { 'content-type': 'image/jpeg' },
+  });
+}
+
+test('a still is reused inside the refresh window and fetched again after it', async (t) => {
+  let now = 1_700_000_000_000;
+  t.mock.method(Date, 'now', () => now);
+  const calls = [];
+  const first = Uint8Array.from([0xff, 0xd8, 1, 0xd9]);
+  const second = Uint8Array.from([0xff, 0xd8, 2, 0xd9]);
+  let image = first;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const href = String(url);
+    calls.push(href);
+    if (href.includes('kygisserver.ky.gov')) {
+      return Response.json(
+        catalogBody([
+          feature({
+            id: 2,
+            lat: 38.25,
+            lon: -85.75,
+            snapshot: 'http://www.trimarc.org/a.jpg',
+          }),
+        ]),
+      );
+    }
+    return jpegResponse(image);
+  });
+  const request = install(kytcProxy());
+  const again = await request('/webcams/2/still');
+  assert.equal(again.status, 200);
+  now += STILL_REFRESH_MS - 1;
+  const cached = await request('/webcams/2/still');
+  assert.deepEqual(Buffer.from(cached.body), Buffer.from(first));
+  assert.equal(calls.filter((href) => href.includes('trimarc.org')).length, 1);
+  image = second;
+  now += 2;
+  const refreshed = await request('/webcams/2/still');
+  assert.deepEqual(Buffer.from(refreshed.body), Buffer.from(second));
+  assert.equal(calls.filter((href) => href.includes('trimarc.org')).length, 2);
+});
+
+test('a failed refresh keeps the last good still and waits out the window', async (t) => {
+  let now = 1_700_000_000_000;
+  t.mock.method(Date, 'now', () => now);
+  const calls = [];
+  let imageOk = true;
+  const jpeg = Uint8Array.from([0xff, 0xd8, 9, 0xd9]);
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const href = String(url);
+    calls.push(href);
+    if (href.includes('kygisserver.ky.gov')) {
+      return Response.json(
+        catalogBody([
+          feature({
+            id: 2,
+            lat: 38.25,
+            lon: -85.75,
+            snapshot: 'http://www.trimarc.org/a.jpg',
+          }),
+        ]),
+      );
+    }
+    if (!imageOk) return new Response('missing', { status: 404 });
+    return jpegResponse(jpeg);
+  });
+  const request = install(kytcProxy());
+  assert.equal((await request('/webcams/2/still')).status, 200);
+  imageOk = false;
+  now += STILL_REFRESH_MS + 5;
+  const kept = await request('/webcams/2/still');
+  assert.equal(kept.status, 200);
+  assert.deepEqual(Buffer.from(kept.body), Buffer.from(jpeg));
+  const imageCalls = () =>
+    calls.filter((href) => href.includes('trimarc.org')).length;
+  assert.equal(imageCalls(), 2);
+  now += STILL_REFRESH_MS - 10;
+  const held = await request('/webcams/2/still');
+  assert.equal(held.status, 200);
+  assert.equal(imageCalls(), 2);
+});
+
+test('warm refreshes only the requested visible ids and returns no image bytes', async (t) => {
+  const calls = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const href = String(url);
+    calls.push(href);
+    if (href.includes('kygisserver.ky.gov')) {
+      return Response.json(
+        catalogBody([
+          feature({
+            id: 1,
+            lat: 38.34,
+            lon: -85.75,
+            snapshot: 'http://pws.trafficwise.org/1.jpg',
+            description: 'I-65 Exit 6 Indiana',
+          }),
+          feature({
+            id: 2,
+            lat: 38.25,
+            lon: -85.74,
+            snapshot: 'http://www.trimarc.org/2.jpg',
+          }),
+          feature({
+            id: 3,
+            lat: 38.37,
+            lon: -85.75,
+            snapshot: 'http://www.trimarc.org/3.jpg',
+            description: 'I-65 at SR 60 Exit 7 Indiana',
+          }),
+          feature({
+            id: 4,
+            lat: 38.2,
+            lon: -85.7,
+            snapshot: 'http://www.trimarc.org/4.jpg',
+          }),
+        ]),
+      );
+    }
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    inFlight -= 1;
+    return jpegResponse();
+  });
+  const request = install(kytcProxy());
+  const warm = await request('/webcams/warm?ids=1,2,3,4,2,nope');
+  const body = json(warm);
+  assert.equal(warm.status, 200);
+  assert.equal(body.refreshed, 4);
+  assert.equal(body.count, 4);
+  assert.equal(warm.body.includes('trimarc'), false);
+  assert.equal(warm.body.includes('trafficwise'), false);
+  assert.equal(JSON.stringify(body).includes('bytes'), false);
+  assert.deepEqual(
+    calls.filter((href) => !href.includes('kygisserver.ky.gov')).sort(),
+    [
+      'http://pws.trafficwise.org/1.jpg',
+      'http://www.trimarc.org/2.jpg',
+      'http://www.trimarc.org/3.jpg',
+      'http://www.trimarc.org/4.jpg',
+    ],
+  );
+  assert.equal(maxInFlight, 2);
+  const cached = await request('/webcams/warm?ids=2');
+  assert.equal(json(cached).cached, 1);
+  assert.equal(json(cached).refreshed, 0);
+  assert.equal(
+    calls.filter((href) => href.includes('trimarc.org/3.jpg')).length,
+    1,
+  );
 });
 
 test('catalog pages follow exceededTransferLimit and then stop', async (t) => {

@@ -2,6 +2,7 @@ import { MAX_CAMERAS, NEARBY_RADIUS_KM, SERVICE_BOUNDS } from './policy.js';
 
 const VIDEO_PATH =
   /\.(?:m3u8|mp4|m4s|ts|mpd)(?:$|[?#])|\/hls(?:\/|$)|playlist/i;
+const INDIANA = /\bindiana\b/i;
 
 function text(value, max = 180) {
   if (typeof value !== 'string' && typeof value !== 'number') return '';
@@ -287,11 +288,27 @@ export function normalizeCamera(raw) {
     county: text(attrs.county, 80),
     district: text(attrs.DISTRICT ?? attrs.district, 8),
     state: text(attrs.state, 40),
+    place: null,
     latitude,
     longitude,
     updatedAt: epochMs(attrs.updateTS ?? attrs.updatets),
     snapshot,
   };
+}
+
+/**
+ * The KY layer mixes in Indiana border cameras. Name that when the record
+ * says so; everything else in this feed is carried as Kentucky.
+ */
+export function cameraPlace(camera) {
+  const state = String(camera?.state || '')
+    .trim()
+    .toLowerCase();
+  const label = `${camera?.description || ''} ${camera?.title || ''} ${camera?.name || ''}`;
+  if (state === 'in' || state === 'indiana' || INDIANA.test(label))
+    return 'Indiana';
+  if (state && state !== 'ky' && state !== 'kentucky') return camera.state;
+  return 'Kentucky';
 }
 
 export function extractCameraFeatures(body) {
@@ -312,11 +329,27 @@ export function publicCamera(camera) {
     county: camera.county,
     district: camera.district,
     state: camera.state,
+    place: cameraPlace(camera),
     latitude: camera.latitude,
     longitude: camera.longitude,
     updatedAt: camera.updatedAt,
     stillUrl: camera.snapshot ? `/api/kytc/webcams/${camera.id}/still` : null,
   };
+}
+
+/** OBJECTIDs a client may ask to refresh. Anything else is ignored. */
+export function parseStillIds(value) {
+  if (typeof value !== 'string' || !value.trim()) return [];
+  const ids = [];
+  const seen = new Set();
+  for (const part of value.split(',')) {
+    const id = part.trim();
+    if (!/^\d{1,12}$/.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+    if (ids.length >= MAX_CAMERAS) break;
+  }
+  return ids;
 }
 
 export function camerasForQuery(cameras, query) {

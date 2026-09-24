@@ -38,7 +38,7 @@ const SOURCE_METHODS = Object.freeze({
   vessels: ['getSnapshot'],
   cctv: ['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'],
   windyWebcams: ['nearby', 'detail', 'forecast'],
-  kytcWebcams: ['cameras'],
+  kytcWebcams: ['cameras', 'warm'],
   radio: ['getDirectory', 'recordClick'],
   traffic: [
     'requestRoads',

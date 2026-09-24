@@ -43,6 +43,18 @@ test('the client asks the proxy by view and never sends an upstream snapshot URL
   }
 });
 
+test('warm posts only the visible camera ids', async () => {
+  const calls = [];
+  const source = createKytcSource({
+    fetchImpl: async (url) => {
+      calls.push(String(url));
+      return jsonResponse(200, { refreshed: 1, cached: 0, kept: 0, failed: 0 });
+    },
+  });
+  await source.warm([2, '2', 'nope', 16]);
+  assert.deepEqual(calls, ['/api/kytc/webcams/warm?ids=2%2C16']);
+});
+
 test('upstream failures stay on the proxy error code', async () => {
   const source = createKytcSource({
     fetchImpl: async () => jsonResponse(502, { error: 'upstream' }),

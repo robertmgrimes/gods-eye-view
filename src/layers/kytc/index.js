@@ -7,8 +7,11 @@ import {
   EMPTY_IN_VIEW_LABEL,
   EMPTY_OUTSIDE_LABEL,
   LAYER_ID,
+  LAYER_INFO,
+  LIST_CACHE_TTL_MS,
   NEARBY_RADIUS_KM,
   REQUEST_DEBOUNCE_MS,
+  STILL_REFRESH_MS,
 } from './policy.js';
 
 const PIN = Cesium.Color.fromCssColorString('#7aa2ff');
@@ -62,8 +65,10 @@ function screenFromClick(viewer, position) {
 }
 
 /**
- * Kentucky traffic-camera pins for the current view. A click opens the still
- * through the same-origin proxy. Image bytes are not requested until then.
+ * Kentucky traffic-camera pins for the current view, including Indiana border
+ * cameras the KYTC layer mixes in. A click opens the still through the
+ * same-origin proxy. Snapshot bytes refresh on a polite cadence for the pins
+ * currently in view.
  */
 export function createKytcWebcamsLayer({ source } = {}) {
   if (typeof source?.cameras !== 'function')
@@ -84,6 +89,12 @@ export function createKytcWebcamsLayer({ source } = {}) {
     count: 0,
     abort: null,
     debounceTimer: null,
+    stillTimer: null,
+    catalogTimer: null,
+    warming: false,
+    warmAgain: false,
+    warmRefreshCard: false,
+    warmAbort: null,
     moveEndRemove: null,
     clickHandler: null,
     controlsListener: null,
@@ -106,6 +117,68 @@ export function createKytcWebcamsLayer({ source } = {}) {
   function clearTimers() {
     clearTimeout(state.debounceTimer);
     state.debounceTimer = null;
+  }
+
+  function clearCadence() {
+    clearInterval(state.stillTimer);
+    clearInterval(state.catalogTimer);
+    state.stillTimer = null;
+    state.catalogTimer = null;
+    state.warmAbort?.abort();
+    state.warmAbort = null;
+    state.warming = false;
+    state.warmAgain = false;
+    state.warmRefreshCard = false;
+  }
+
+  function visibleStillIds() {
+    return state.records
+      .filter((record) => record.stillUrl)
+      .map((record) => record.id);
+  }
+
+  async function warmVisible({ refreshCard = false } = {}) {
+    if (!state.enabled || typeof source.warm !== 'function') return;
+    if (state.warming) {
+      state.warmAgain = true;
+      state.warmRefreshCard = state.warmRefreshCard || refreshCard;
+      return;
+    }
+    state.warming = true;
+    state.warmRefreshCard = refreshCard;
+    const request = new AbortController();
+    state.warmAbort = request;
+    try {
+      do {
+        const refresh = state.warmRefreshCard;
+        state.warmAgain = false;
+        state.warmRefreshCard = false;
+        const selected = state.selectedId;
+        await source.warm(visibleStillIds(), { signal: request.signal });
+        if (!state.enabled || state.warmAbort !== request) return;
+        if (refresh && selected && state.selectedId === selected) {
+          const record = state.byId.get(selected);
+          if (record) showCamera(record, state.lastScreen, { refresh: true });
+        }
+      } while (state.warmAgain && state.enabled && state.warmAbort === request);
+    } catch {
+      /* a missed still refresh waits for the next cadence */
+    } finally {
+      if (state.warmAbort === request) {
+        state.warmAbort = null;
+        state.warming = false;
+      }
+    }
+  }
+
+  function startCadence() {
+    clearCadence();
+    state.stillTimer = setInterval(() => {
+      warmVisible({ refreshCard: true });
+    }, STILL_REFRESH_MS);
+    state.catalogTimer = setInterval(() => {
+      loadCameras();
+    }, LIST_CACHE_TTL_MS);
   }
 
   function entityId(id) {
@@ -233,6 +306,7 @@ export function createKytcWebcamsLayer({ source } = {}) {
         state.records.length ? (state.stale ? 'stale' : 'ready') : 'empty',
         null,
       );
+      warmVisible();
     } catch (error) {
       if (
         error?.name === 'AbortError' ||
@@ -312,10 +386,12 @@ export function createKytcWebcamsLayer({ source } = {}) {
       if (state.enabled) return;
       state.enabled = true;
       if (state.dataSource) state.dataSource.show = true;
+      startCadence();
     },
     disable() {
       state.enabled = false;
       clearTimers();
+      clearCadence();
       state.abort?.abort();
       state.abort = null;
       state.loading = false;
@@ -349,7 +425,7 @@ export function createKytcWebcamsLayer({ source } = {}) {
     getRowControls() {
       return {
         chips: [],
-        info: 'Kentucky traffic stills · click a pin',
+        info: LAYER_INFO,
       };
     },
     getStats() {

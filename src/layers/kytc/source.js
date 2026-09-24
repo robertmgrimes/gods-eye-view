@@ -51,5 +51,18 @@ export function createKytcSource({
       }
       return get(`/api/kytc/webcams?${params}`, signal);
     },
+    warm(ids = [], { signal } = {}) {
+      const seen = new Set();
+      const list = [];
+      for (const raw of Array.isArray(ids) ? ids : []) {
+        const id = String(raw).trim();
+        if (!/^\d{1,12}$/.test(id) || seen.has(id)) continue;
+        seen.add(id);
+        list.push(id);
+      }
+      const params = new URLSearchParams();
+      params.set('ids', list.join(','));
+      return get(`/api/kytc/webcams/warm?${params}`, signal);
+    },
   };
 }

@@ -9,12 +9,15 @@ import {
   isAllowedSnapshotUrl,
   normalizeCamera,
   parseCameraQuery,
+  parseStillIds,
   publicCamera,
   queryIntersectsService,
 } from '../../src/layers/kytc/model.js';
 import {
   LIST_CACHE_TTL_MS,
+  STILL_FETCH_CONCURRENCY,
   STILL_MAX_BYTES,
+  STILL_REFRESH_MS,
 } from '../../src/layers/kytc/policy.js';
 
 const QUERY_URL =
@@ -32,19 +35,24 @@ const IMAGE_TYPES = new Set([
  *
  *   GET /api/kytc/webcams?west=&south=&east=&north=
  *   GET /api/kytc/webcams?lat=&lon=&radiusKm=
+ *   GET /api/kytc/webcams/warm?ids=1,2,3
  *   GET /api/kytc/webcams/:id/still
  *
- * The catalog is about 226 features. It is fetched at most once per cache
- * window, then filtered to the requested view. A view that misses Kentucky
- * returns an empty list and does not call KYTC. Snapshot fields are HTTP
- * JPEGs, so the browser only receives a same-origin still URL; the image
- * bytes are fetched here on click.
+ * The catalog is about 226 features. It is fetched on first use and again
+ * after a day, then filtered to the requested view. A view that misses the
+ * service footprint returns an empty list and does not call KYTC. Snapshot
+ * fields are HTTP JPEGs, so the browser only receives a same-origin still
+ * URL. Image bytes are cached per OBJECTID and refreshed for the visible
+ * ids only. A failed host keeps the last good image.
+ * Layer questions: kytc.gis.support@KY.Gov
  *
  * @returns {import('vite').Plugin}
  */
 export function kytcProxy() {
   const BODY_CAP = 2_000_000;
   let catalog = null;
+  /** @type {Map<string, { at: number, bytes: Uint8Array | null, contentType: string, kept?: boolean }>} */
+  const stills = new Map();
   const catalogInflight = new Map();
   const stillInflight = new Map();
 
@@ -209,6 +217,111 @@ export function kytcProxy() {
     throw fail(502, 'upstream');
   }
 
+  async function loadStill(camera) {
+    const cached = stills.get(camera.id);
+    if (cached && Date.now() - cached.at < STILL_REFRESH_MS) {
+      if (cached.bytes) return cached;
+      throw fail(502, 'upstream');
+    }
+    const { promise } = coalesceProxyRequest(
+      stillInflight,
+      camera.id,
+      async () => {
+        try {
+          const image = await fetchStill(camera.snapshot);
+          const entry = {
+            at: Date.now(),
+            bytes: image.bytes,
+            contentType: image.contentType,
+            kept: false,
+          };
+          stills.set(camera.id, entry);
+          return entry;
+        } catch (error) {
+          const previous = stills.get(camera.id);
+          if (previous?.bytes) {
+            const kept = {
+              at: Date.now(),
+              bytes: previous.bytes,
+              contentType: previous.contentType,
+              kept: true,
+            };
+            stills.set(camera.id, kept);
+            return kept;
+          }
+          stills.set(camera.id, {
+            at: Date.now(),
+            bytes: null,
+            contentType: '',
+            kept: false,
+          });
+          throw error;
+        }
+      },
+    );
+    return promise;
+  }
+
+  function retainVisibleStills(ids, cameras) {
+    const wanted = new Set(ids);
+    const known = new Set(
+      cameras.filter((camera) => camera.snapshot).map((camera) => camera.id),
+    );
+    for (const id of [...stills.keys()]) {
+      if (!wanted.has(id) || !known.has(id)) stills.delete(id);
+    }
+  }
+
+  async function runPool(items, limit, worker) {
+    if (!items.length) return;
+    let cursor = 0;
+    const lanes = Math.max(1, Math.min(limit, items.length));
+    async function lane() {
+      while (cursor < items.length) {
+        const index = cursor;
+        cursor += 1;
+        await worker(items[index]);
+      }
+    }
+    await Promise.all(Array.from({ length: lanes }, () => lane()));
+  }
+
+  async function warmStills(ids) {
+    const entry = await loadCatalog();
+    retainVisibleStills(ids, entry.cameras);
+    const targets = ids
+      .map((id) => entry.cameras.find((row) => row.id === id))
+      .filter((camera) => camera?.snapshot);
+    const tally = { refreshed: 0, cached: 0, kept: 0, failed: 0 };
+    await runPool(targets, STILL_FETCH_CONCURRENCY, async (camera) => {
+      const cached = stills.get(camera.id);
+      if (cached?.bytes && Date.now() - cached.at < STILL_REFRESH_MS) {
+        tally.cached += 1;
+        return;
+      }
+      try {
+        const image = await loadStill(camera);
+        if (!image?.bytes) tally.failed += 1;
+        else if (image.kept) tally.kept += 1;
+        else tally.refreshed += 1;
+      } catch {
+        tally.failed += 1;
+      }
+    });
+    return { fetchedAt: entry.at, count: targets.length, ...tally };
+  }
+
+  function writeStill(res, image) {
+    if (res.headersSent || !image?.bytes) return;
+    res.writeHead(200, {
+      'Content-Type': image.contentType,
+      'Content-Length': String(image.bytes.byteLength),
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(Buffer.from(image.bytes));
+  }
+
   const installMiddleware = (server) => {
     server.middlewares.use('/api/kytc', async (req, res) => {
       try {
@@ -249,6 +362,14 @@ export function kytcProxy() {
           return;
         }
 
+        if (path === '/webcams/warm' || path === '/webcams/warm/') {
+          const report = await warmStills(
+            parseStillIds(url.searchParams.get('ids')),
+          );
+          sendJson(res, 200, report);
+          return;
+        }
+
         const still = path.match(/^\/webcams\/(\d{1,12})\/still$/);
         if (still) {
           const entry = await loadCatalog();
@@ -257,20 +378,7 @@ export function kytcProxy() {
             sendJson(res, 404, { error: 'not_found' });
             return;
           }
-          const { promise } = coalesceProxyRequest(
-            stillInflight,
-            camera.id,
-            () => fetchStill(camera.snapshot),
-          );
-          const image = await promise;
-          if (res.headersSent) return;
-          res.writeHead(200, {
-            'Content-Type': image.contentType,
-            'Content-Length': String(image.bytes.byteLength),
-            'Cache-Control': 'no-store',
-            'X-Content-Type-Options': 'nosniff',
-          });
-          res.end(Buffer.from(image.bytes));
+          writeStill(res, await loadStill(camera));
           return;
         }
 
