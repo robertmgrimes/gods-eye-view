@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { governorRequestRender } from '../../renderGovernor.js';
 import {
   cwwpClientMessage,
   isCameraId,
@@ -227,30 +228,68 @@ export function createCwwpWebcamsLayer({ source } = {}) {
       const id = entityId(record.id);
       const selected = record.id === state.selectedId;
       let entity = data.entities.getById(id);
+      const height = pinHeight(record);
       const position = Cesium.Cartesian3.fromDegrees(
         record.longitude,
         record.latitude,
+        height,
       );
       if (!entity) {
         entity = data.entities.add({
           id,
           position,
           point: {
-            pixelSize: 10,
+            pixelSize: 12,
             color: PIN,
-            outlineColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.BLACK,
             outlineWidth: 2,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           },
         });
       } else {
         entity.position = position;
       }
-      entity.point.pixelSize = selected ? 14 : 10;
+      entity.point.pixelSize = selected ? 14 : 12;
       entity.point.color = selected ? PIN_SELECTED : PIN;
     }
     state.count = data.entities.values.length;
+    governorRequestRender('cwwp-pins');
+  }
+
+  function pinHeight(record) {
+    return Number.isFinite(record?.elevationMeters)
+      ? record.elevationMeters
+      : 80;
+  }
+
+  /** The view box is a rectangle around a trapezoid, so corners can be off-screen. */
+  function projectsOnScreen(record) {
+    const viewer = state.viewer;
+    const canvas = viewer?.scene?.canvas;
+    if (!viewer || !canvas) return false;
+    let win;
+    try {
+      win = Cesium.SceneTransforms.worldToWindowCoordinates(
+        viewer.scene,
+        Cesium.Cartesian3.fromDegrees(
+          record.longitude,
+          record.latitude,
+          pinHeight(record),
+        ),
+      );
+    } catch {
+      return false;
+    }
+    if (!win) return false;
+    const width = canvas.clientWidth || canvas.width;
+    const height = canvas.clientHeight || canvas.height;
+    if (!width || !height) return false;
+    return (
+      win.x >= -24 &&
+      win.y >= -24 &&
+      win.x <= width + 24 &&
+      win.y <= height + 24
+    );
   }
 
   function closePopover() {
@@ -314,7 +353,8 @@ export function createCwwpWebcamsLayer({ source } = {}) {
           record &&
           isCameraId(record.id) &&
           Number.isFinite(record.latitude) &&
-          Number.isFinite(record.longitude),
+          Number.isFinite(record.longitude) &&
+          projectsOnScreen(record),
       );
       state.byId = new Map(state.records.map((record) => [record.id, record]));
       if (state.selectedId && !state.byId.has(state.selectedId)) closePopover();

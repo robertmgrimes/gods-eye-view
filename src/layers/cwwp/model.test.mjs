@@ -42,6 +42,7 @@ const avenue26 = {
       nearbyPlace: 'Cypress Park',
       longitude: '-118.2215',
       latitude: '34.0837',
+      elevation: '95',
       direction: 'South',
       county: 'Los Angeles',
       route: 'I-110',
@@ -67,9 +68,11 @@ test('a CWWP record becomes a pin and keeps only a public still path', () => {
   assert.equal(camera.place, 'Cypress Park');
   assert.equal(camera.latitude, 34.0837);
   assert.equal(camera.longitude, -118.2215);
+  assert.equal(camera.elevationMeters, 95);
   assert.equal(camera.updateFrequencyMinutes, 2);
   assert.match(camera.snapshot, /^https:\/\/cwwp2\.dot\.ca\.gov\//);
   const published = publicCamera(camera);
+  assert.equal(published.elevationMeters, 95);
   assert.equal(published.stillUrl, '/api/cwwp/webcams/d07-1/still');
   assert.equal(published.snapshot, undefined);
   assert.equal(JSON.stringify(published).includes('cwwp2.dot.ca.gov'), false);

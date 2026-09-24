@@ -352,6 +352,7 @@ export function normalizeCamera(raw, fileDistrict) {
   const snapshot = isAllowedSnapshotUrl(still) ? stillImageUrl(still) : null;
   const frequency = Number(cctv.imageData?.static?.currentImageUpdateFrequency);
   const name = text(location.locationName, 180);
+  const elevation = Number(location.elevation);
   return {
     id,
     title: name || 'Caltrans camera',
@@ -362,6 +363,10 @@ export function normalizeCamera(raw, fileDistrict) {
     district: String(Number(fileDistrict)),
     latitude,
     longitude,
+    elevationMeters:
+      Number.isFinite(elevation) && elevation >= -100 && elevation <= 5000
+        ? elevation
+        : null,
     updatedAt: epochMs(cctv.recordTimestamp?.recordEpoch),
     updateFrequencyMinutes:
       Number.isFinite(frequency) && frequency > 0 ? frequency : 2,
@@ -387,6 +392,7 @@ export function publicCamera(camera) {
     district: camera.district,
     latitude: camera.latitude,
     longitude: camera.longitude,
+    elevationMeters: camera.elevationMeters,
     updatedAt: camera.updatedAt,
     stillUrl: camera.snapshot ? `/api/cwwp/webcams/${camera.id}/still` : null,
   };
