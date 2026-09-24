@@ -50,6 +50,7 @@ test('panel presentation places KYTC next to Windy in Cameras', () => {
       'windy-webcams',
       'ky-kytc-webcams',
       'ca-cwwp-webcams',
+      'al-algo-webcams',
       'recent-imagery',
     ],
   );

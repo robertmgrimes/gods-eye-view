@@ -12,6 +12,7 @@ import { createApplicationCctv } from './layers/cctv.js';
 import { createApplicationWindyWebcams } from './layers/windyWebcams.js';
 import { createApplicationKytcWebcams } from './layers/kytcWebcams.js';
 import { createApplicationCwwpWebcams } from './layers/cwwpWebcams.js';
+import { createApplicationAlgoWebcams } from './layers/algoWebcams.js';
 import { createApplicationRadio } from './layers/radio.js';
 import { createApplicationTraffic } from './layers/traffic.js';
 import { createApplicationBikeshare } from './layers/bikeshare.js';
@@ -41,6 +42,7 @@ const SOURCE_METHODS = Object.freeze({
   windyWebcams: ['nearby', 'detail', 'forecast'],
   kytcWebcams: ['cameras', 'warm'],
   cwwpWebcams: ['cameras', 'warm'],
+  algoWebcams: ['cameras', 'warm'],
   radio: ['getDirectory', 'recordClick'],
   traffic: [
     'requestRoads',
@@ -161,6 +163,7 @@ export function createApplicationCatalog({
         createApplicationWindyWebcams({ source: sources.windyWebcams }),
         createApplicationKytcWebcams({ source: sources.kytcWebcams }),
         createApplicationCwwpWebcams({ source: sources.cwwpWebcams }),
+        createApplicationAlgoWebcams({ source: sources.algoWebcams }),
         createApplicationRadio({ surface, source: sources.radio }),
         createApplicationTransit({ surface, source: sources.transit }),
         createApplicationBikeshare({ source: sources.bikeshare }),

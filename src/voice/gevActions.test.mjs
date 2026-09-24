@@ -3261,6 +3261,30 @@ test('Caltrans names toggle only the CWWP camera layer through the normal voice 
   }
 });
 
+test('ALGO names toggle only the Alabama camera layer through the normal voice action', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['al-algo-webcams', { module: {} }]]),
+    getAll: () => [{ id: 'al-algo-webcams', name: 'ALGO (experimental)' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['al-algo-webcams', 'algo', 'algo cameras', 'alabama cameras', 'ALGO Traffic']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'al-algo-webcams');
+      assert.deepEqual(calls.at(-1), ['al-algo-webcams', value]);
+    }
+  }
+});
+
 test('ISS voice lookup uses the registered satellite instance', async () => {
   const calls = [];
   const viewer = {
