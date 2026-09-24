@@ -142,6 +142,7 @@ const schemas = [
             'fire-perimeters',
             'alpr-cameras',
             'local-adsb',
+            'windy-webcams',
           ],
         },
         enabled: {
@@ -175,6 +176,7 @@ const schemas = [
             'local-firms',
             'fire-perimeters',
             'alpr-cameras',
+            'windy-webcams',
           ],
         },
       },

@@ -14,6 +14,8 @@ module.exports = {
           OPENAI_API_KEY: '{{env.OPENAI_API_KEY || ""}}',
           AISSTREAM_API_KEY: '{{env.AISSTREAM_API_KEY || ""}}',
           FIRMS_MAP_KEY: '{{env.FIRMS_MAP_KEY || ""}}',
+          WINDY_API_KEY: '{{env.WINDY_API_KEY || ""}}',
+          WINDY_POINT_FORECAST_API_KEY: '{{env.WINDY_POINT_FORECAST_API_KEY || ""}}',
           TOMTOM_API_KEY: '{{env.TOMTOM_API_KEY || ""}}',
           OPENSKY_CLIENT_ID: '{{env.OPENSKY_CLIENT_ID || ""}}',
           OPENSKY_CLIENT_SECRET: '{{env.OPENSKY_CLIENT_SECRET || ""}}',
