@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
-import { kytcClientMessage, parseBBox, parseNearby } from './model.js';
+import { kytcClientMessage, parseBBox, preferLocalQuery } from './model.js';
 import { createKytcPopover } from './popover.js';
 import {
   AIM_LABEL,
@@ -9,9 +9,9 @@ import {
   LAYER_ID,
   LAYER_INFO,
   LIST_CACHE_TTL_MS,
-  NEARBY_RADIUS_KM,
   REQUEST_DEBOUNCE_MS,
   STILL_REFRESH_MS,
+  STILL_WARM_LIMIT,
 } from './policy.js';
 
 const PIN = Cesium.Color.fromCssColorString('#7aa2ff');
@@ -40,22 +40,19 @@ function viewQuery(viewer) {
   const rectangle = viewer?.camera?.computeViewRectangle?.(
     viewer.scene?.globe?.ellipsoid,
   );
-  if (rectangle) {
-    const box = parseBBox({
-      west: Cesium.Math.toDegrees(rectangle.west),
-      south: Cesium.Math.toDegrees(rectangle.south),
-      east: Cesium.Math.toDegrees(rectangle.east),
-      north: Cesium.Math.toDegrees(rectangle.north),
-    });
-    if (box) return box;
-  }
-  const center = viewCenter(viewer);
-  if (!center) return null;
-  return parseNearby({
-    lat: center.lat,
-    lon: center.lon,
-    radiusKm: NEARBY_RADIUS_KM,
-  });
+  const box = rectangle
+    ? parseBBox({
+        west: Cesium.Math.toDegrees(rectangle.west),
+        south: Cesium.Math.toDegrees(rectangle.south),
+        east: Cesium.Math.toDegrees(rectangle.east),
+        north: Cesium.Math.toDegrees(rectangle.north),
+      })
+    : null;
+  return preferLocalQuery(
+    box,
+    viewCenter(viewer),
+    viewer?.camera?.positionCartographic?.height,
+  );
 }
 
 function screenFromClick(viewer, position) {
@@ -131,10 +128,32 @@ export function createKytcWebcamsLayer({ source } = {}) {
     state.warmRefreshCard = false;
   }
 
-  function visibleStillIds() {
-    return state.records
-      .filter((record) => record.stillUrl)
-      .map((record) => record.id);
+  function warmIds() {
+    const center = state.viewer ? viewCenter(state.viewer) : null;
+    const ranked = state.records.filter((record) => record.stillUrl);
+    if (center) {
+      ranked.sort((a, b) => {
+        const da =
+          (a.latitude - center.lat) ** 2 + (a.longitude - center.lon) ** 2;
+        const db =
+          (b.latitude - center.lat) ** 2 + (b.longitude - center.lon) ** 2;
+        return da - db;
+      });
+    }
+    const ids = [];
+    const seen = new Set();
+    const selected = state.byId.get(state.selectedId);
+    if (selected?.stillUrl) {
+      ids.push(selected.id);
+      seen.add(selected.id);
+    }
+    for (const record of ranked) {
+      if (seen.has(record.id)) continue;
+      ids.push(record.id);
+      seen.add(record.id);
+      if (ids.length >= STILL_WARM_LIMIT) break;
+    }
+    return ids;
   }
 
   async function warmVisible({ refreshCard = false } = {}) {
@@ -154,7 +173,7 @@ export function createKytcWebcamsLayer({ source } = {}) {
         state.warmAgain = false;
         state.warmRefreshCard = false;
         const selected = state.selectedId;
-        await source.warm(visibleStillIds(), { signal: request.signal });
+        await source.warm(warmIds(), { signal: request.signal });
         if (!state.enabled || state.warmAbort !== request) return;
         if (refresh && selected && state.selectedId === selected) {
           const record = state.byId.get(selected);

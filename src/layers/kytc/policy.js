@@ -29,6 +29,12 @@ export const STILL_REFRESH_MS = 90 * 1000;
 /** Parallel snapshot fetches. Keeps a metro view from opening every host at once. */
 export const STILL_FETCH_CONCURRENCY = 2;
 
+/**
+ * Most stills refreshed in one pass. A wide or not-yet-settled view must not
+ * pull a JPEG for every camera in the catalog.
+ */
+export const STILL_WARM_LIMIT = 40;
+
 /** Trimarc stills are about 2 MB. Leave headroom and refuse anything larger. */
 export const STILL_MAX_BYTES = 8 * 1024 * 1024;
 

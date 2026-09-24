@@ -202,6 +202,38 @@ export function parseCameraQuery(searchParams) {
   });
 }
 
+/** Camera height in meters to a nearby radius. Street zoom stays tight. */
+export function nearbyRadiusForHeight(heightMeters) {
+  const km = Number(heightMeters) / 1000;
+  if (!Number.isFinite(km) || km <= 0) return NEARBY_RADIUS_KM;
+  return Math.max(2, Math.min(NEARBY_RADIUS_KM, Math.round(km)));
+}
+
+/** A rectangle big enough to see past a state, including the whole ellipsoid. */
+export function viewBoxIsBroad(box) {
+  if (!box || box.kind !== 'bbox') return true;
+  const latSpan = box.north - box.south;
+  let lonSpan = box.east - box.west;
+  if (lonSpan < 0) lonSpan += 360;
+  return latSpan > 8 || lonSpan > 8;
+}
+
+/**
+ * Prefer the real view rectangle. Cesium reports the whole globe before the
+ * camera settles and while the ellipsoid is hidden, so that case uses a
+ * height-scaled circle around the ground center.
+ */
+export function preferLocalQuery(box, center, heightMeters) {
+  if (box && !viewBoxIsBroad(box)) return box;
+  if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lon))
+    return null;
+  return parseNearby({
+    lat: center.lat,
+    lon: center.lon,
+    radiusKm: nearbyRadiusForHeight(heightMeters),
+  });
+}
+
 export function pointInBBox(lat, lon, box) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || !box) return false;
   if (lat < box.south || lat > box.north) return false;

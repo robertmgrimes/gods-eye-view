@@ -14,6 +14,7 @@ import {
   parseCameraQuery,
   parseNearby,
   parseStillIds,
+  preferLocalQuery,
   publicCamera,
   queryIntersectsService,
   sameOriginStillUrl,
@@ -23,6 +24,7 @@ import {
   LIST_CACHE_TTL_MS,
   STILL_FETCH_CONCURRENCY,
   STILL_REFRESH_MS,
+  STILL_WARM_LIMIT,
 } from './policy.js';
 
 const louisville = {
@@ -184,6 +186,23 @@ test('catalog and still cadence stay inside the handoff bounds', () => {
   assert.ok(STILL_REFRESH_MS >= 30_000);
   assert.ok(STILL_REFRESH_MS <= 120_000);
   assert.equal(STILL_FETCH_CONCURRENCY, 2);
+  assert.ok(STILL_WARM_LIMIT >= 1);
+  assert.ok(STILL_WARM_LIMIT <= 40);
+});
+
+test('a whole-globe rectangle falls back to a tight circle around the camera', () => {
+  const world = parseBBox({ west: -180, south: -90, east: 180, north: 90 });
+  const local = preferLocalQuery(world, { lat: 38.259, lon: -85.741 }, 700);
+  assert.equal(local.kind, 'nearby');
+  assert.equal(local.radiusKm, 2);
+  assert.equal(local.lat, 38.259);
+  const metro = parseBBox({
+    west: -85.9,
+    south: 38.1,
+    east: -85.6,
+    north: 38.4,
+  });
+  assert.equal(preferLocalQuery(metro, { lat: 38.2, lon: -85.7 }, 700), metro);
 });
 
 test('the KYTC layer share hash round-trips on the unused token 4', () => {
