@@ -194,11 +194,15 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 29);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 29);
+  assert.equal(REGISTERED_LAYER_IDS.length, 30);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 30);
   assert.equal(
     LAYER_STATE_REGISTRY.find((entry) => entry.id === 'windy-webcams')?.token,
     '3',
+  );
+  assert.equal(
+    LAYER_STATE_REGISTRY.find((entry) => entry.id === 'ky-kytc-webcams')?.token,
+    '4',
   );
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());

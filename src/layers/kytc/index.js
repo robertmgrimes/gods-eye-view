@@ -1,0 +1,376 @@
+import * as Cesium from 'cesium';
+import { isPointerFree } from '../../data/inputOwnership.js';
+import { kytcClientMessage, parseBBox, parseNearby } from './model.js';
+import { createKytcPopover } from './popover.js';
+import {
+  AIM_LABEL,
+  EMPTY_IN_VIEW_LABEL,
+  EMPTY_OUTSIDE_LABEL,
+  LAYER_ID,
+  NEARBY_RADIUS_KM,
+  REQUEST_DEBOUNCE_MS,
+} from './policy.js';
+
+const PIN = Cesium.Color.fromCssColorString('#7aa2ff');
+const PIN_SELECTED = Cesium.Color.fromCssColorString('#ffe08a');
+
+function viewCenter(viewer) {
+  const canvas = viewer?.scene?.canvas;
+  const camera = viewer?.camera;
+  if (!canvas || typeof camera?.pickEllipsoid !== 'function') return null;
+  const width = canvas.clientWidth || canvas.width;
+  const height = canvas.clientHeight || canvas.height;
+  if (!width || !height) return null;
+  const focus = camera.pickEllipsoid(
+    new Cesium.Cartesian2(width / 2, height / 2),
+    viewer.scene.globe?.ellipsoid,
+  );
+  if (!focus) return null;
+  const cartographic = Cesium.Cartographic.fromCartesian(focus);
+  return {
+    lat: Cesium.Math.toDegrees(cartographic.latitude),
+    lon: Cesium.Math.toDegrees(cartographic.longitude),
+  };
+}
+
+function viewQuery(viewer) {
+  const rectangle = viewer?.camera?.computeViewRectangle?.(
+    viewer.scene?.globe?.ellipsoid,
+  );
+  if (rectangle) {
+    const box = parseBBox({
+      west: Cesium.Math.toDegrees(rectangle.west),
+      south: Cesium.Math.toDegrees(rectangle.south),
+      east: Cesium.Math.toDegrees(rectangle.east),
+      north: Cesium.Math.toDegrees(rectangle.north),
+    });
+    if (box) return box;
+  }
+  const center = viewCenter(viewer);
+  if (!center) return null;
+  return parseNearby({
+    lat: center.lat,
+    lon: center.lon,
+    radiusKm: NEARBY_RADIUS_KM,
+  });
+}
+
+function screenFromClick(viewer, position) {
+  const rect = viewer?.scene?.canvas?.getBoundingClientRect?.();
+  if (!rect || !position) return { x: 24, y: 24 };
+  return { x: rect.left + position.x, y: rect.top + position.y };
+}
+
+/**
+ * Kentucky traffic-camera pins for the current view. A click opens the still
+ * through the same-origin proxy. Image bytes are not requested until then.
+ */
+export function createKytcWebcamsLayer({ source } = {}) {
+  if (typeof source?.cameras !== 'function')
+    throw new TypeError('KYTC webcams require a cameras source');
+
+  const state = {
+    viewer: null,
+    dataSource: null,
+    enabled: false,
+    records: [],
+    byId: new Map(),
+    selectedId: null,
+    loading: false,
+    error: null,
+    status: 'idle',
+    stale: false,
+    lastUpdate: null,
+    count: 0,
+    abort: null,
+    debounceTimer: null,
+    moveEndRemove: null,
+    clickHandler: null,
+    controlsListener: null,
+    popover: null,
+    stillRetried: false,
+    lastScreen: null,
+    emptyLabel: '',
+  };
+
+  function notify() {
+    state.controlsListener?.();
+  }
+
+  function setStatus(status, error = null) {
+    state.status = status;
+    state.error = error;
+    notify();
+  }
+
+  function clearTimers() {
+    clearTimeout(state.debounceTimer);
+    state.debounceTimer = null;
+  }
+
+  function entityId(id) {
+    return `kytc:${id}`;
+  }
+
+  function cameraIdFromEntity(entity) {
+    const id = entity?.id;
+    return typeof id === 'string' && id.startsWith('kytc:')
+      ? id.slice(5)
+      : null;
+  }
+
+  function renderPins() {
+    const data = state.dataSource;
+    if (!data) return;
+    const next = new Set(state.records.map((record) => record.id));
+    for (const entity of [...data.entities.values]) {
+      const id = cameraIdFromEntity(entity);
+      if (!next.has(id)) data.entities.remove(entity);
+    }
+    for (const record of state.records) {
+      const id = entityId(record.id);
+      const selected = record.id === state.selectedId;
+      let entity = data.entities.getById(id);
+      const position = Cesium.Cartesian3.fromDegrees(
+        record.longitude,
+        record.latitude,
+      );
+      if (!entity) {
+        entity = data.entities.add({
+          id,
+          position,
+          point: {
+            pixelSize: 10,
+            color: PIN,
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 2,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          },
+        });
+      } else {
+        entity.position = position;
+      }
+      entity.point.pixelSize = selected ? 14 : 10;
+      entity.point.color = selected ? PIN_SELECTED : PIN;
+    }
+    state.count = data.entities.values.length;
+  }
+
+  function closePopover() {
+    state.selectedId = null;
+    state.popover?.hide();
+    renderPins();
+  }
+
+  function stillSrc(record, { refresh = false } = {}) {
+    if (!record?.stillUrl) return null;
+    if (!refresh) return record.stillUrl;
+    const path = record.stillUrl.split('?')[0];
+    return `${path}?t=${Date.now()}`;
+  }
+
+  function showCamera(record, screen, { error = null, refresh = false } = {}) {
+    state.selectedId = record?.id || null;
+    if (screen) state.lastScreen = screen;
+    renderPins();
+    state.popover?.show({
+      record,
+      screen: screen || state.lastScreen,
+      stillUrl: stillSrc(record, { refresh }),
+      error,
+      refreshOnError: !state.stillRetried,
+    });
+  }
+
+  function openCamera(id, screen, { refresh = false } = {}) {
+    const known = state.byId.get(id);
+    if (!known || !state.enabled) return;
+    if (!refresh) state.stillRetried = false;
+    showCamera(known, screen, { refresh });
+  }
+
+  async function loadCameras() {
+    if (!state.enabled || !state.viewer) return;
+    clearTimers();
+    const query = viewQuery(state.viewer);
+    if (!query) {
+      state.loading = false;
+      state.emptyLabel = AIM_LABEL;
+      state.records = [];
+      state.byId = new Map();
+      renderPins();
+      setStatus('zoom-in', null);
+      return;
+    }
+    state.abort?.abort();
+    const request = new AbortController();
+    state.abort = request;
+    state.loading = true;
+    setStatus('loading', null);
+    try {
+      const payload = await source.cameras(query, { signal: request.signal });
+      if (request.signal.aborted || state.abort !== request || !state.enabled)
+        return;
+      const records = Array.isArray(payload?.cameras) ? payload.cameras : [];
+      state.records = records.filter(
+        (record) =>
+          record &&
+          /^\d{1,12}$/.test(String(record.id || '')) &&
+          Number.isFinite(record.latitude) &&
+          Number.isFinite(record.longitude),
+      );
+      state.byId = new Map(state.records.map((record) => [record.id, record]));
+      if (state.selectedId && !state.byId.has(state.selectedId)) closePopover();
+      state.lastUpdate = Number(payload?.fetchedAt) || Date.now();
+      state.stale = payload?.stale === true;
+      state.emptyLabel =
+        payload?.coverage === 'outside'
+          ? EMPTY_OUTSIDE_LABEL
+          : EMPTY_IN_VIEW_LABEL;
+      renderPins();
+      setStatus(
+        state.records.length ? (state.stale ? 'stale' : 'ready') : 'empty',
+        null,
+      );
+    } catch (error) {
+      if (
+        error?.name === 'AbortError' ||
+        request.signal.aborted ||
+        state.abort !== request ||
+        !state.enabled
+      )
+        return;
+      setStatus('unavailable', kytcClientMessage(error.code));
+    } finally {
+      if (state.abort === request) {
+        state.abort = null;
+        state.loading = false;
+        notify();
+      }
+    }
+  }
+
+  function scheduleLoad() {
+    if (!state.enabled) return;
+    clearTimers();
+    state.debounceTimer = setTimeout(() => {
+      state.debounceTimer = null;
+      loadCameras();
+    }, REQUEST_DEBOUNCE_MS);
+  }
+
+  function installClick(viewer) {
+    if (state.clickHandler) return;
+    state.clickHandler = new Cesium.ScreenSpaceEventHandler(
+      viewer.scene.canvas,
+    );
+    state.clickHandler.setInputAction((click) => {
+      if (!isPointerFree() || !state.enabled) return;
+      const picked = viewer.scene.pick?.(click.position);
+      const id = cameraIdFromEntity(picked?.id);
+      if (!id || !state.byId.has(id)) return;
+      openCamera(id, screenFromClick(viewer, click.position));
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  }
+
+  const layer = {
+    id: LAYER_ID,
+    name: 'KYTC Cameras',
+    icon: '📷',
+    source: 'KYTC',
+    updateInterval: 0,
+    statsRefreshInterval: 1000,
+    init(viewer) {
+      if (state.viewer)
+        throw new Error('KYTC webcam layer is already initialized');
+      state.viewer = viewer;
+      state.dataSource = new Cesium.CustomDataSource(LAYER_ID);
+      state.dataSource.show = false;
+      viewer.dataSources.add(state.dataSource);
+      state.moveEndRemove =
+        viewer.camera.moveEnd.addEventListener(scheduleLoad);
+      state.popover = createKytcPopover({
+        document: viewer.scene.canvas?.ownerDocument,
+      });
+      state.popover.setHandlers({
+        onClose: () => closePopover(),
+        onRefresh: () => {
+          if (!state.selectedId) return;
+          state.stillRetried = false;
+          openCamera(state.selectedId, state.lastScreen, { refresh: true });
+        },
+        onImageError: () => {
+          if (state.stillRetried || !state.selectedId) return;
+          state.stillRetried = true;
+          openCamera(state.selectedId, state.lastScreen, { refresh: true });
+        },
+      });
+      installClick(viewer);
+    },
+    enable() {
+      if (state.enabled) return;
+      state.enabled = true;
+      if (state.dataSource) state.dataSource.show = true;
+    },
+    disable() {
+      state.enabled = false;
+      clearTimers();
+      state.abort?.abort();
+      state.abort = null;
+      state.loading = false;
+      closePopover();
+      if (state.dataSource) state.dataSource.show = false;
+      setStatus('idle', null);
+    },
+    update() {
+      return loadCameras();
+    },
+    destroy(viewer = state.viewer) {
+      this.disable();
+      state.moveEndRemove?.();
+      state.moveEndRemove = null;
+      state.clickHandler?.destroy();
+      state.clickHandler = null;
+      state.popover?.destroy();
+      state.popover = null;
+      if (state.dataSource && viewer)
+        viewer.dataSources.remove(state.dataSource, true);
+      state.dataSource = null;
+      state.records = [];
+      state.byId = new Map();
+      state.viewer = null;
+      state.lastUpdate = null;
+      state.count = 0;
+    },
+    setRowControlsListener(listener) {
+      state.controlsListener = typeof listener === 'function' ? listener : null;
+    },
+    getRowControls() {
+      return {
+        chips: [],
+        info: 'Kentucky traffic stills · click a pin',
+      };
+    },
+    getStats() {
+      let loadingLabel = '';
+      if (state.loading) loadingLabel = 'loading…';
+      else if (state.status === 'empty') loadingLabel = state.emptyLabel;
+      else if (state.status === 'zoom-in') loadingLabel = AIM_LABEL;
+      else if (state.error) loadingLabel = state.error;
+      else if (state.stale) loadingLabel = 'STALE';
+      else if (state.lastUpdate) loadingLabel = `${state.count} in view`;
+      return {
+        count: state.count,
+        lastUpdate: state.lastUpdate,
+        loading: state.loading,
+        stale: state.stale,
+        status: state.status,
+        error: state.error,
+        loadingLabel,
+      };
+    },
+  };
+
+  return layer;
+}

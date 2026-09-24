@@ -32,7 +32,7 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Cameras',
-    ids: ['cctv', 'windy-webcams', 'recent-imagery'],
+    ids: ['cctv', 'windy-webcams', 'ky-kytc-webcams', 'recent-imagery'],
   },
   {
     label: 'Infrastructure',
@@ -74,6 +74,7 @@ const PANEL_LABELS = {
   bikeshare: 'Bike Share',
   cctv: 'Cameras',
   'windy-webcams': 'Windy Webcams',
+  'ky-kytc-webcams': 'KYTC Cameras',
   'alpr-cameras': 'Mapped ALPR Cameras',
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',

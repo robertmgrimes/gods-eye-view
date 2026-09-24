@@ -143,6 +143,7 @@ const schemas = [
             'alpr-cameras',
             'local-adsb',
             'windy-webcams',
+            'ky-kytc-webcams',
           ],
         },
         enabled: {
@@ -177,6 +178,7 @@ const schemas = [
             'fire-perimeters',
             'alpr-cameras',
             'windy-webcams',
+            'ky-kytc-webcams',
           ],
         },
       },

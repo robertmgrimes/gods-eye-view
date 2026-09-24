@@ -3213,6 +3213,30 @@ test('Windy names toggle only the webcam layer through the normal voice action',
   }
 });
 
+test('KYTC names toggle only the Kentucky camera layer through the normal voice action', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['ky-kytc-webcams', { module: {} }]]),
+    getAll: () => [{ id: 'ky-kytc-webcams', name: 'KYTC Cameras' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['ky-kytc-webcams', 'kytc', 'kentucky cameras', 'KYTC Webcams']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'ky-kytc-webcams');
+      assert.deepEqual(calls.at(-1), ['ky-kytc-webcams', value]);
+    }
+  }
+});
+
 test('ISS voice lookup uses the registered satellite instance', async () => {
   const calls = [];
   const viewer = {
