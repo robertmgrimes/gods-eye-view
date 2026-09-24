@@ -3,6 +3,7 @@ import { initAnnotations } from '../annotations/index.js';
 import { initDrawTool } from '../annotations/drawTool.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
+import { createWebcamExplorePanel } from '../ui/webcamExplore.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
@@ -90,6 +91,19 @@ export function createApplicationTools({
         delete window.__gevRecentImagery;
       data.presentation.attachRecentImagery(null);
       imageryBoxTool?.destroy();
+    });
+  }
+  const webcamExplore = dataManager.layers.get('webcam-explore')?.module;
+  if (webcamExplore) {
+    data.presentation.attachWebcamExplore((container) =>
+      createWebcamExplorePanel({ container, layer: webcamExplore }),
+    );
+    const webcamExploreHandle = { layer: webcamExplore };
+    window.__gevWebcamExplore = webcamExploreHandle;
+    defer(() => {
+      if (window.__gevWebcamExplore === webcamExploreHandle)
+        delete window.__gevWebcamExplore;
+      data.presentation.attachWebcamExplore(null);
     });
   }
   if (startChrome)

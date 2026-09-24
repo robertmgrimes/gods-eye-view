@@ -27,9 +27,9 @@ test('the complete Realtime tool payload pins the additive analyst, satellite, L
     .digest('hex');
   assert.equal(
     digest,
-    // Re-derived for the additive `al-algo-webcams` visibility value and the
+    // Re-derived for the additive `webcam-explore` visibility value and the
     // Cyber HUD layout; the separate sonar tool is excluded above.
-    '1c79505a726a07ce0f3d53a0e65c949ee1564ce2d2479531c4593332bf520709',
+    'd4b62b14de983997720efbf404d186e73939b14cbc5c0acceb4de050b3e90a33',
   );
 });
 
@@ -112,6 +112,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'ky-kytc-webcams',
         'ca-cwwp-webcams',
         'al-algo-webcams',
+        'webcam-explore',
       ].includes(key),
   );
   const menu = legacy.find((tool) => tool.name === 'show_data_layers_menu')
@@ -121,7 +122,8 @@ test('all legacy action arguments are byte-identical after removing the delibera
       key !== 'windy-webcams' &&
       key !== 'ky-kytc-webcams' &&
       key !== 'ca-cwwp-webcams' &&
-      key !== 'al-algo-webcams',
+      key !== 'al-algo-webcams' &&
+      key !== 'webcam-explore',
   );
   for (const tool of legacy) {
     for (const value of Object.values(tool.parameters.properties)) {

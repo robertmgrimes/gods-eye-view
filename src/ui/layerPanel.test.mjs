@@ -51,6 +51,7 @@ test('panel presentation places KYTC next to Windy in Cameras', () => {
       'ky-kytc-webcams',
       'ca-cwwp-webcams',
       'al-algo-webcams',
+      'webcam-explore',
       'recent-imagery',
     ],
   );

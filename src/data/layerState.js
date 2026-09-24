@@ -583,6 +583,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     optionOwner: 'weather-satellite',
   }),
   Object.freeze({
+    id: 'webcam-explore',
+    token: '7',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'wind',
     token: 'k',
     disposition: 'enabled+options',

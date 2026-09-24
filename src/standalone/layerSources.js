@@ -8,6 +8,7 @@ import { createWindySource } from '../layers/windy/source.js';
 import { createKytcSource } from '../layers/kytc/source.js';
 import { createCwwpSource } from '../layers/cwwp/source.js';
 import { createAlgoSource } from '../layers/algo/source.js';
+import { createWebcamExploreSource } from '../layers/webcamExplore/source.js';
 import { createRadioSource } from '../layers/radio/source.js';
 import { createTransitSource } from '../layers/transit/source.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
@@ -37,6 +38,7 @@ export function createStandaloneLayerSources() {
     kytcWebcams: createKytcSource(),
     cwwpWebcams: createCwwpSource(),
     algoWebcams: createAlgoSource(),
+    webcamExplore: createWebcamExploreSource(),
     radio: createRadioSource(),
     traffic: createTrafficSource(),
     transit: createTransitSource(),
