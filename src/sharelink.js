@@ -20,6 +20,69 @@ import {
 const DEBOUNCE_MS = 500;
 const LEGACY_BLOOM_FALLBACK = 50;
 
+/**
+ * Camera position whose view ray through the canvas center meets the ground
+ * at lat/lon. Altitude stays the camera height. Pitch stays the tilt: the
+ * camera backs up opposite its heading by alt / tan(|pitch|). Straight down
+ * stays on the point. The -35° default is unchanged.
+ */
+export function cameraDestinationForTarget({
+  lon,
+  lat,
+  alt,
+  heading = 0,
+  pitch = -35,
+} = {}) {
+  const height = Number(alt);
+  const pitchRad = Cesium.Math.toRadians(Number(pitch));
+  const headingRad = Cesium.Math.toRadians(Number(heading) || 0);
+  const tilt = Math.abs(pitchRad);
+  const onTarget = Cesium.Cartesian3.fromDegrees(lon, lat, height);
+  if (
+    !(tilt > 0.02) ||
+    !(tilt < Math.PI / 2 - 1e-4) ||
+    !Number.isFinite(height) ||
+    height <= 0
+  ) {
+    return onTarget;
+  }
+  const backMeters = height / Math.tan(tilt);
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
+    Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+  );
+  const shifted = Cesium.Matrix4.multiplyByPoint(
+    enu,
+    new Cesium.Cartesian3(
+      -backMeters * Math.sin(headingRad),
+      -backMeters * Math.cos(headingRad),
+      0,
+    ),
+    new Cesium.Cartesian3(),
+  );
+  const carto = Cesium.Cartographic.fromCartesian(shifted);
+  return Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, height);
+}
+
+/** Ground point under the canvas center, in degrees. */
+export function groundLookAt(viewer) {
+  const canvas = viewer?.scene?.canvas;
+  const camera = viewer?.camera;
+  if (!canvas || typeof camera?.pickEllipsoid !== 'function') return null;
+  const width = canvas.clientWidth || canvas.width;
+  const height = canvas.clientHeight || canvas.height;
+  if (!width || !height) return null;
+  const focus = camera.pickEllipsoid(
+    new Cesium.Cartesian2(width / 2, height / 2),
+    viewer.scene.globe?.ellipsoid,
+  );
+  if (!focus) return null;
+  const carto = Cesium.Cartographic.fromCartesian(focus);
+  return {
+    lat: Cesium.Math.toDegrees(carto.latitude),
+    lon: Cesium.Math.toDegrees(carto.longitude),
+  };
+}
+
 // Style name mapping: internal → URL-friendly
 const STYLE_TO_URL = {
   normal: 'normal',
@@ -272,11 +335,7 @@ export class ShareLinkManager {
     if (this._destroyed || !state)
       return { succeeded: false, reason: 'unavailable' };
     const view = {
-      destination: Cesium.Cartesian3.fromDegrees(
-        state.lon,
-        state.lat,
-        state.alt,
-      ),
+      destination: cameraDestinationForTarget(state),
       orientation: {
         heading: Cesium.Math.toRadians(state.heading),
         pitch: Cesium.Math.toRadians(state.pitch),
@@ -555,10 +614,17 @@ export class ShareLinkManager {
     const carto = camera.positionCartographic;
     if (!carto) return null;
 
+    const looked = groundLookAt(this.viewer);
     const params = new URLSearchParams();
     params.set('v', '2');
-    params.set('lat', Cesium.Math.toDegrees(carto.latitude).toFixed(4));
-    params.set('lon', Cesium.Math.toDegrees(carto.longitude).toFixed(4));
+    params.set(
+      'lat',
+      (looked ? looked.lat : Cesium.Math.toDegrees(carto.latitude)).toFixed(4),
+    );
+    params.set(
+      'lon',
+      (looked ? looked.lon : Cesium.Math.toDegrees(carto.longitude)).toFixed(4),
+    );
     params.set('alt', Math.round(carto.height).toString());
     params.set(
       'heading',

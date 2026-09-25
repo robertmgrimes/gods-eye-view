@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as Cesium from 'cesium';
-import { ShareLinkManager, panelStateForRestoredLayers } from '../sharelink.js';
+import {
+  ShareLinkManager,
+  cameraDestinationForTarget,
+  panelStateForRestoredLayers,
+} from '../sharelink.js';
 import { createWindyWebcamsLayer } from './windy/index.js';
 import { createKytcWebcamsLayer } from './kytc/index.js';
 import { createCwwpWebcamsLayer } from './cwwp/index.js';
@@ -30,17 +34,28 @@ function viewerAt(place) {
       return { left: 0, top: 0, width: 800, height: 600 };
     },
   };
+  const pose = {
+    destination: Cesium.Cartesian3.fromDegrees(place.lon, place.lat, 40000),
+    heading: 0,
+    pitch: Cesium.Math.toRadians(-90),
+  };
   const camera = {
     changed: new Cesium.Event(),
     moveEnd: new Cesium.Event(),
     positionCartographic: { height: 40000 },
     pickEllipsoid() {
-      return Cesium.Cartesian3.fromDegrees(place.lon, place.lat);
+      const ground = groundUnderPose(pose.destination, pose.heading, pose.pitch);
+      return ground
+        ? Cesium.Cartesian3.fromDegrees(ground.lon, ground.lat)
+        : null;
     },
     flyTo(options) {
+      rememberPose(pose, options);
       options?.complete?.();
     },
-    setView() {},
+    setView(options) {
+      rememberPose(pose, options);
+    },
   };
   return {
     camera,
@@ -63,6 +78,38 @@ function cameraRecord(id, place) {
     pin: true,
     kind: 'still',
     name: id,
+  };
+}
+
+function rememberPose(pose, options) {
+  if (options?.destination) pose.destination = options.destination;
+  if (Number.isFinite(options?.orientation?.heading))
+    pose.heading = options.orientation.heading;
+  if (Number.isFinite(options?.orientation?.pitch))
+    pose.pitch = options.orientation.pitch;
+}
+
+function groundUnderPose(destination, heading, pitch) {
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(destination);
+  const direction = Cesium.Matrix4.multiplyByPointAsVector(
+    enu,
+    new Cesium.Cartesian3(
+      Math.cos(pitch) * Math.sin(heading),
+      Math.cos(pitch) * Math.cos(heading),
+      Math.sin(pitch),
+    ),
+    new Cesium.Cartesian3(),
+  );
+  Cesium.Cartesian3.normalize(direction, direction);
+  const ray = new Cesium.Ray(destination, direction);
+  const hit = Cesium.IntersectionTests.rayEllipsoid(ray, Cesium.Ellipsoid.WGS84);
+  if (!hit) return null;
+  const carto = Cesium.Cartographic.fromCartesian(
+    Cesium.Ray.getPoint(ray, hit.start),
+  );
+  return {
+    lat: Cesium.Math.toDegrees(carto.latitude),
+    lon: Cesium.Math.toDegrees(carto.longitude),
   };
 }
 
@@ -298,6 +345,48 @@ test('panel toggle fetches and draws pins when the camera is already on target',
   } finally {
     for (const layer of layers) layer.destroy(viewer);
   }
+});
+
+test('a share link with no pitch centers the hash lat/lon under a -35° tilt', () => {
+  globalThis.window = {
+    location: {
+      hash: '#lat=38.25&lon=-85.76&alt=40000&heading=0',
+      href: 'http://localhost/#lat=38.25&lon=-85.76&alt=40000&heading=0',
+    },
+  };
+  const parsed = new ShareLinkManager({
+    camera: { changed: { addEventListener() {} } },
+  }).parseInitialHash();
+  assert.equal(parsed.pitch, -35);
+  const target = { lon: -85.76, lat: 38.25, alt: 40000, heading: 0, pitch: -35 };
+  const destination = cameraDestinationForTarget(target);
+  const ground = groundUnderPose(
+    destination,
+    Cesium.Math.toRadians(0),
+    Cesium.Math.toRadians(-35),
+  );
+  assert.ok(Math.abs(ground.lat - target.lat) < 0.02, `lat ${ground.lat}`);
+  assert.ok(Math.abs(ground.lon - target.lon) < 0.02, `lon ${ground.lon}`);
+  const nadir = cameraDestinationForTarget({
+    lon: -118.24,
+    lat: 34.05,
+    alt: 40000,
+    heading: 0,
+    pitch: -89,
+  });
+  const nadirGround = groundUnderPose(
+    nadir,
+    0,
+    Cesium.Math.toRadians(-89),
+  );
+  assert.ok(Math.abs(nadirGround.lat - 34.05) < 0.02);
+  assert.ok(Math.abs(nadirGround.lon + 118.24) < 0.02);
+  assert.ok(
+    Cesium.Cartesian3.distance(
+      nadir,
+      Cesium.Cartesian3.fromDegrees(-118.24, 34.05, 40000),
+    ) < 2000,
+  );
 });
 
 test('hash restore opens Data Layers when Webcam Explore is enabled', () => {
