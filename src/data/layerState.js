@@ -457,6 +457,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled-only',
   }),
   Object.freeze({
+    id: 'al-algo-webcams',
+    token: '6',
+    disposition: 'enabled-only',
+  }),
+  Object.freeze({
     id: 'alpr-cameras',
     token: 'p',
     disposition: 'enabled-only',

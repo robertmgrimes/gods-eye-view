@@ -5,6 +5,7 @@ import { createApplicationCatalog } from './constructCatalog.js';
 import { createStandaloneLayerSources } from '../standalone/layerSources.js';
 import { catalogControlServices } from './catalog.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
+import { readAlgoCamerasFlag } from '../layers/algo/flag.js';
 
 function fixtureSources(ids, calls) {
   const sources = createStandaloneLayerSources();
@@ -39,7 +40,7 @@ test('catalogs construct distinct layers and classification from their supplied 
     signal: b.signal,
     surface: fixtureSurface(b.signal),
   });
-  assert.equal(first.layers.length, 32);
+  assert.equal(first.layers.length, 33);
   assert.ok(first.get('local-adsb'), 'Local ADS-B is registered');
   assert.deepEqual(
     first.metadata.find(({ id }) => id === 'local-adsb'),
@@ -69,6 +70,7 @@ test('catalogs construct distinct layers and classification from their supplied 
       'windy-webcams',
       'ky-kytc-webcams',
       'ca-cwwp-webcams',
+      'al-algo-webcams',
       'radio',
       'transit',
       'bikeshare',
@@ -93,6 +95,11 @@ test('catalogs construct distinct layers and classification from their supplied 
     rows.find((row) => row.id === 'flights')?.showInTogglePanel,
     true,
     'ordinary data layer entries remain visible',
+  );
+  assert.equal(
+    first.get('al-algo-webcams').showInTogglePanel,
+    readAlgoCamerasFlag(process.env.GEV_ALGO_CAMERAS),
+    'ALGO is hidden unless GEV_ALGO_CAMERAS is 1 or true',
   );
   assert.deepEqual(
     first.layers.map(({ id }) => id),

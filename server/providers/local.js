@@ -28,6 +28,7 @@ import { windProxy } from './wind.js';
 import { windyProxy } from './windy.js';
 import { kytcProxy } from './kytc.js';
 import { cwwpProxy } from './cwwp.js';
+import { algoProxy } from './algo.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -58,6 +59,7 @@ function localProviderPlugins() {
     windyProxy(),
     kytcProxy(),
     cwwpProxy(),
+    algoProxy(),
     weatherProxy(),
     cycloneProxy(),
     firePerimetersProxy(),

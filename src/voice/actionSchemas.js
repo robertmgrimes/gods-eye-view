@@ -145,6 +145,7 @@ const schemas = [
             'windy-webcams',
             'ky-kytc-webcams',
             'ca-cwwp-webcams',
+            'al-algo-webcams',
           ],
         },
         enabled: {
@@ -181,6 +182,7 @@ const schemas = [
             'windy-webcams',
             'ky-kytc-webcams',
             'ca-cwwp-webcams',
+            'al-algo-webcams',
           ],
         },
       },

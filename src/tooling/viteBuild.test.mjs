@@ -30,6 +30,7 @@ test('explicit build inputs preserve browser-only defines, plugin order and loop
   assert.deepEqual(config.define, {
     'import.meta.env.GOOGLE_MAPS_API_KEY': '"browser-fixture"',
     'import.meta.env.CESIUM_ION_TOKEN': '"ion-fixture"',
+    __GEV_ALGO_CAMERAS__: '""',
   });
   assert.equal(
     createBrowserViteConfig({ host: '0.0.0.0', port: '4800' }).server

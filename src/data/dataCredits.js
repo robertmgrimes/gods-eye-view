@@ -342,6 +342,18 @@ export const TOMTOM_CREDIT = {
     '<a href="https://www.tomtom.com" target="_blank" rel="noopener">TomTom</a>',
 };
 
+/**
+ * Registered only when the experimental ALGO layer is actually enabled.
+ * The feed is undocumented and not cleared for production.
+ */
+export const ALGO_CREDIT = {
+  key: 'algo-traffic',
+  html:
+    'ALGO Traffic cameras (experimental): Alabama traveler information via ' +
+    '<a href="https://algotraffic.com/Cameras" target="_blank" rel="noopener">algotraffic.com</a>. ' +
+    'WARNING: undocumented public JSON, not a stable contracted API, not cleared for production. Stills only.',
+};
+
 /** Registered when the first Natural Earth region outline resolves (public
  * domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {

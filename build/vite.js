@@ -10,6 +10,7 @@ export function createBrowserViteConfig({
   host = 'localhost',
   port = 4173,
   command,
+  algoCameras = '',
 } = {}) {
   return {
     plugins: [cesium(), applicationHtmlPlugin(), ...plugins],
@@ -47,6 +48,15 @@ export function createBrowserViteConfig({
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
+      __GEV_ALGO_CAMERAS__: JSON.stringify(
+        ['1', 'true'].includes(
+          String(algoCameras ?? '')
+            .trim()
+            .toLowerCase(),
+        )
+          ? '1'
+          : '',
+      ),
     },
     build: { chunkSizeWarningLimit: 1500 },
   };
