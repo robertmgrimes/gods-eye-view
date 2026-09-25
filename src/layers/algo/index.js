@@ -66,6 +66,7 @@ function viewQuery(viewer) {
     box,
     viewCenter(viewer),
     viewer?.camera?.positionCartographic?.height,
+    viewer?.camera?.pitch,
   );
 }
 
@@ -110,6 +111,8 @@ export function createAlgoWebcamsLayer({
     warmRefreshCard: false,
     warmAbort: null,
     moveEndRemove: null,
+    refilterRemove: null,
+    pendingCandidates: null,
     clickHandler: null,
     controlsListener: null,
     popover: null,
@@ -267,11 +270,22 @@ export function createAlgoWebcamsLayer({
     governorRequestRender('algo-pins');
   }
 
-  /** The view box is a rectangle around a trapezoid, so corners can be off-screen. */
-  function projectsOnScreen(record) {
+  function clearRefilter() {
+    state.refilterRemove?.();
+    state.refilterRemove = null;
+  }
+
+  /**
+   * Cesium always creates scene.frameState. Projection is ready only when that
+   * frame has a camera frustum and the window transform returns a finite point.
+   * 'unready' means keep the camera and try again after the next frame.
+   */
+  function screenStatus(record) {
     const viewer = state.viewer;
     const canvas = viewer?.scene?.canvas;
-    if (!viewer || !canvas) return false;
+    if (!viewer || !canvas) return 'off';
+    const frameCamera = viewer.scene.frameState?.camera;
+    if (!frameCamera?.frustum) return 'unready';
     let win;
     try {
       win = Cesium.SceneTransforms.worldToWindowCoordinates(
@@ -283,17 +297,55 @@ export function createAlgoWebcamsLayer({
         ),
       );
     } catch {
-      return false;
+      return 'unready';
     }
-    if (!win) return false;
+    if (!win || !Number.isFinite(win.x) || !Number.isFinite(win.y))
+      return 'unready';
     const width = canvas.clientWidth || canvas.width;
     const height = canvas.clientHeight || canvas.height;
-    if (!width || !height) return false;
-    return (
+    if (!width || !height) return 'unready';
+    const on =
       win.x >= -24 &&
       win.y >= -24 &&
       win.x <= width + 24 &&
-      win.y <= height + 24
+      win.y <= height + 24;
+    return on ? 'on' : 'off';
+  }
+
+  function scheduleRefilter() {
+    if (state.refilterRemove) return;
+    const postRender = state.viewer?.scene?.postRender;
+    if (typeof postRender?.addEventListener !== 'function') return;
+    const remove = postRender.addEventListener(() => {
+      remove();
+      state.refilterRemove = null;
+      if (!state.enabled || !state.pendingCandidates) return;
+      publishVisible(state.pendingCandidates, { final: true });
+    });
+    state.refilterRemove = remove;
+  }
+
+  function publishVisible(candidates, { final }) {
+    const statuses = candidates.map((record) => screenStatus(record));
+    const unready = statuses.some((status) => status === 'unready');
+    if (unready && !final) {
+      state.records = candidates;
+      scheduleRefilter();
+    } else if (unready) {
+      clearRefilter();
+      state.records = candidates;
+    } else {
+      clearRefilter();
+      state.pendingCandidates = null;
+      state.records = candidates.filter((_, index) => statuses[index] === 'on');
+    }
+    state.byId = new Map(state.records.map((record) => [record.id, record]));
+    keepSearchHold(state);
+    if (state.selectedId && !state.byId.has(state.selectedId)) closePopover();
+    renderPins();
+    setStatus(
+      state.records.length ? (state.stale ? 'stale' : 'ready') : 'empty',
+      null,
     );
   }
 
@@ -353,28 +405,21 @@ export function createAlgoWebcamsLayer({
       if (request.signal.aborted || state.abort !== request || !state.enabled)
         return;
       const records = Array.isArray(payload?.cameras) ? payload.cameras : [];
-      state.records = records.filter(
-        (record) =>
-          record &&
-          isCameraId(record.id) &&
-          Number.isFinite(record.latitude) &&
-          Number.isFinite(record.longitude) &&
-          projectsOnScreen(record),
-      );
-      state.byId = new Map(state.records.map((record) => [record.id, record]));
-      keepSearchHold(state);
-      if (state.selectedId && !state.byId.has(state.selectedId)) closePopover();
       state.lastUpdate = Number(payload?.fetchedAt) || Date.now();
       state.stale = payload?.stale === true;
       state.emptyLabel =
         payload?.coverage === 'outside'
           ? EMPTY_OUTSIDE_LABEL
           : EMPTY_IN_VIEW_LABEL;
-      renderPins();
-      setStatus(
-        state.records.length ? (state.stale ? 'stale' : 'ready') : 'empty',
-        null,
+      const candidates = records.filter(
+        (record) =>
+          record &&
+          isCameraId(record.id) &&
+          Number.isFinite(record.latitude) &&
+          Number.isFinite(record.longitude),
       );
+      state.pendingCandidates = candidates;
+      publishVisible(candidates, { final: false });
       warmVisible();
     } catch (error) {
       if (
@@ -481,6 +526,8 @@ export function createAlgoWebcamsLayer({
       this.disable();
       state.moveEndRemove?.();
       state.moveEndRemove = null;
+      clearRefilter();
+      state.pendingCandidates = null;
       state.clickHandler?.destroy();
       state.clickHandler = null;
       state.popover?.destroy();

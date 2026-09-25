@@ -203,6 +203,20 @@ test('a whole-globe rectangle falls back to a tight circle around the camera', (
     north: 38.4,
   });
   assert.equal(preferLocalQuery(metro, { lat: 38.2, lon: -85.7 }, 700), metro);
+  const oblique = preferLocalQuery(
+    world,
+    { lat: 38.25, lon: -85.76 },
+    40000,
+    (-35 * Math.PI) / 180,
+  );
+  assert.ok(oblique.radiusKm >= 57);
+  const nadir = preferLocalQuery(
+    world,
+    { lat: 38.25, lon: -85.76 },
+    40000,
+    (-89 * Math.PI) / 180,
+  );
+  assert.equal(nadir.radiusKm, 40);
 });
 
 test('the KYTC layer share hash round-trips on the unused token 4', () => {
