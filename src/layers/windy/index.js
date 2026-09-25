@@ -28,6 +28,17 @@ function viewCenter(viewer) {
   };
 }
 
+function nearbyRadiusKm(viewer) {
+  const pitch = Number(viewer?.camera?.pitch);
+  if (!Number.isFinite(pitch)) return NEARBY_RADIUS_KM;
+  const fromNadir = Math.PI / 2 + pitch;
+  if (!(fromNadir > 0.08)) return NEARBY_RADIUS_KM;
+  const km = Number(viewer?.camera?.positionCartographic?.height) / 1000;
+  const heightKm = Number.isFinite(km) && km > 0 ? km : NEARBY_RADIUS_KM;
+  const ahead = heightKm * Math.tan(Math.min(fromNadir, 1.05));
+  return Math.min(250, Math.max(NEARBY_RADIUS_KM, Math.ceil(ahead + 5)));
+}
+
 function screenFromClick(viewer, position) {
   const rect = viewer?.scene?.canvas?.getBoundingClientRect?.();
   if (!rect || !position) return { x: 24, y: 24 };
@@ -275,7 +286,7 @@ export function createWindyWebcamsLayer({ source } = {}) {
       const payload = await source.nearby({
         lat: center.lat,
         lon: center.lon,
-        radiusKm: NEARBY_RADIUS_KM,
+        radiusKm: nearbyRadiusKm(state.viewer),
         signal: request.signal,
       });
       if (request.signal.aborted || state.abort !== request || !state.enabled)

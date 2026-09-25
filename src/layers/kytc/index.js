@@ -54,6 +54,7 @@ function viewQuery(viewer) {
     box,
     viewCenter(viewer),
     viewer?.camera?.positionCartographic?.height,
+    viewer?.camera?.pitch,
   );
 }
 

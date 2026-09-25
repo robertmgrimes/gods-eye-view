@@ -44,7 +44,12 @@ function viewerAt(place) {
   };
   return {
     camera,
-    scene: { canvas, requestRender() {} },
+    scene: {
+      canvas,
+      requestRender() {},
+      frameState: { camera: { frustum: {} } },
+      postRender: new Cesium.Event(),
+    },
     dataSources: { add() {}, remove() {} },
   };
 }
@@ -76,7 +81,9 @@ function nearLouisville(query) {
   );
 }
 
-test('share restore reloads viewport cameras and a panel toggle draws every pin layer', async () => {
+test('share restore keeps Caltrans and ALGO pins when the window transform is not ready', async () => {
+  const original = Cesium.SceneTransforms.worldToWindowCoordinates;
+  Cesium.SceneTransforms.worldToWindowCoordinates = () => undefined;
   const place = { ...HOME };
   const viewer = viewerAt(place);
   const calls = [];
@@ -194,10 +201,18 @@ test('share restore reloads viewport cameras and a panel toggle draws every pin 
     assert.equal(kytc.getStats().count, 1);
     assert.equal(cwwp.getStats().count, 1);
     assert.equal(algo.getStats().count, 1);
+    Cesium.SceneTransforms.worldToWindowCoordinates = () => ({
+      x: -1000,
+      y: -1000,
+    });
+    viewer.scene.postRender.raiseEvent();
+    assert.equal(cwwp.getStats().count, 0);
+    assert.equal(algo.getStats().count, 0);
     explore.enable(viewer);
     await explore.search('Bern');
     assert.equal(explore.getSnapshot().webcams.length, 1);
   } finally {
+    Cesium.SceneTransforms.worldToWindowCoordinates = original;
     for (const layer of layers) layer.destroy(viewer);
     share?.destroy();
   }
