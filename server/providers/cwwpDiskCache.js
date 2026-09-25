@@ -17,6 +17,9 @@ import {
 /** Gitignored dev-server cache. Served stale, refreshed in the background. */
 export const CWWP_DISK_DIR = path.join(process.cwd(), '.cache', 'gev-caltrans');
 
+/** node:test sets this. The dev server must not warm or write the real cache then. */
+export const CWWP_UNDER_TEST = process.env.NODE_TEST_CONTEXT != null;
+
 /**
  * One JSON file per district. Writes land in a temp file and rename into
  * place, so a crash cannot leave a half-written catalog as the live copy.
@@ -27,6 +30,11 @@ export function createCwwpDiskCache({
   maxBytes = DISTRICT_DISK_MAX_BYTES,
   now = () => Date.now(),
 } = {}) {
+  if (CWWP_UNDER_TEST && path.resolve(dir) === path.resolve(CWWP_DISK_DIR)) {
+    throw new Error(
+      `tests must not use the real Caltrans cache at ${CWWP_DISK_DIR}`,
+    );
+  }
   function filePath(district) {
     return path.join(dir, `d${String(district).padStart(2, '0')}.json`);
   }

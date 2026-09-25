@@ -1,3 +1,4 @@
+import { claimCameraCard, releaseCameraCard } from '../cameraCards.js';
 import { sameOriginStillUrl } from './model.js';
 import { CREDIT_NOTE } from './policy.js';
 
@@ -151,9 +152,11 @@ export function createNpsNaturePopover({
         actions.append(button('refresh', 'Refresh still'));
       node.append(actions);
       node.hidden = false;
+      claimCameraCard(this);
       place(view.screen);
     },
     hide() {
+      releaseCameraCard(this);
       if (root) root.hidden = true;
     },
     destroy() {

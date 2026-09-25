@@ -61,6 +61,25 @@ function textOf(node) {
   return own + (node.children || []).map(textOf).join('');
 }
 
+test('opening a camera card closes the one already on screen', () => {
+  const doc = fakeDocument();
+  const caltrans = createCwwpPopover({ document: doc });
+  const kytc = createKytcPopover({ document: doc });
+  caltrans.show({
+    record: { title: 'Sacramento', route: 'I-5' },
+    screen: { x: 40, y: 40 },
+  });
+  assert.equal(caltrans.element.hidden, false);
+  kytc.show({
+    record: { title: 'Lexington', highway: 'I-64' },
+    screen: { x: 40, y: 40 },
+  });
+  assert.equal(caltrans.element.hidden, true);
+  assert.equal(kytc.element.hidden, false);
+  caltrans.destroy();
+  kytc.destroy();
+});
+
 test('non-Windy camera cards do not offer an Open on Windy link', () => {
   const record = {
     title: 'KYTC camera',

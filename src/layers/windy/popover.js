@@ -6,6 +6,7 @@ import {
   formatTempC,
   formatWind,
 } from './model.js';
+import { claimCameraCard, releaseCameraCard } from '../cameraCards.js';
 
 function el(doc, tag, className, text) {
   const node = doc.createElement(tag);
@@ -221,9 +222,11 @@ export function createWindyPopover({
       if (view?.kind === 'forecast') renderForecast(view);
       else renderWebcam(view || {});
       node.hidden = false;
+      claimCameraCard(this);
       place(view?.screen);
     },
     hide() {
+      releaseCameraCard(this);
       if (root) root.hidden = true;
     },
     destroy() {

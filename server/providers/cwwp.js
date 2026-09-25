@@ -28,7 +28,14 @@ import {
   UPSTREAM_ATTEMPTS,
   stillRefreshMs,
 } from '../../src/layers/cwwp/policy.js';
-import { createCwwpDiskCache } from './cwwpDiskCache.js';
+import path from 'node:path';
+import {
+  CWWP_DISK_DIR,
+  CWWP_UNDER_TEST,
+  createCwwpDiskCache,
+} from './cwwpDiskCache.js';
+
+const REAL_FETCH = globalThis.fetch;
 
 const IMAGE_TYPES = new Set([
   'image/jpeg',
@@ -57,7 +64,19 @@ const RETRY_STATUSES = new Set([429, 502, 503, 504]);
  *
  * @returns {import('vite').Plugin}
  */
-export function cwwpProxy({ disk = createCwwpDiskCache(), warm = true } = {}) {
+export function cwwpProxy({
+  disk = CWWP_UNDER_TEST ? null : createCwwpDiskCache(),
+  warm = !CWWP_UNDER_TEST,
+} = {}) {
+  if (
+    CWWP_UNDER_TEST &&
+    disk?.dir &&
+    path.resolve(disk.dir) === path.resolve(CWWP_DISK_DIR)
+  ) {
+    throw new Error(
+      `tests must not use the real Caltrans cache at ${CWWP_DISK_DIR}`,
+    );
+  }
   /** @type {Map<number, { at: number, stale: boolean, failed: boolean, cameras: object[] }>} */
   const districts = new Map();
   /** @type {Map<string, { at: number, bytes: Uint8Array | null, contentType: string, kept?: boolean }>} */
@@ -153,6 +172,9 @@ export function cwwpProxy({ disk = createCwwpDiskCache(), warm = true } = {}) {
   }
 
   async function fetchDistrict(district) {
+    if (CWWP_UNDER_TEST && globalThis.fetch === REAL_FETCH) {
+      throw new Error('Caltrans tests must not reach the live feed');
+    }
     const response = await fetchUpstream(districtStatusUrl(district), {
       accept: 'application/json',
       'user-agent': 'gods-eye-view-cwwp/1.0',

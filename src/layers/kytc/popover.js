@@ -1,3 +1,4 @@
+import { claimCameraCard, releaseCameraCard } from '../cameraCards.js';
 import { sameOriginStillUrl } from './model.js';
 
 function el(doc, tag, className, text) {
@@ -137,9 +138,11 @@ export function createKytcPopover({
       actions.append(button('refresh', 'Refresh still'));
       node.append(actions);
       node.hidden = false;
+      claimCameraCard(this);
       place(view.screen);
     },
     hide() {
+      releaseCameraCard(this);
       if (root) root.hidden = true;
     },
     destroy() {

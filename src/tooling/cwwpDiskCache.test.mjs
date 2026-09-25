@@ -68,6 +68,26 @@ test('a corrupt district file is ignored', async () => {
   }
 });
 
+test('tests cannot use the real Caltrans cache or the live feed', async () => {
+  assert.equal(process.env.NODE_TEST_CONTEXT != null, true);
+  assert.throws(() => createCwwpDiskCache(), /real Caltrans cache/);
+  const calls = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    throw new Error('network');
+  };
+  try {
+    const plugin = cwwpProxy();
+    plugin.configureServer({ middlewares: { use() {} } });
+    plugin.configurePreviewServer({ middlewares: { use() {} } });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.deepEqual(calls, []);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 test('the Caltrans cache directory is gitignored', async () => {
   const ignore = await readFile(
     new URL('../../.gitignore', import.meta.url),
