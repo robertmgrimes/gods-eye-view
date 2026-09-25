@@ -248,7 +248,10 @@ export class ShareLinkManager {
         params.get('v') === '2' &&
         params.has('l') &&
         decodedLayerState === null,
-      panelState: decodePanelStateParams(params),
+      panelState: panelStateForRestoredLayers(
+        decodedLayerState,
+        decodePanelStateParams(params),
+      ),
       sharedAtMs: decodeShareCreatedAtMs(params),
     };
     state.restoreAuthority = {
@@ -317,6 +320,12 @@ export class ShareLinkManager {
           }
           this.viewer.camera.setView(view);
           this.viewer.scene?.requestRender?.();
+          // flyTo finishes with setView. Under requestRenderMode Cesium only
+          // raises moveEnd on a later frame, after cameraEventWaitTime, and
+          // the idle governor never schedules that frame. Viewport camera
+          // layers listen solely to moveEnd, so a settled share link kept
+          // the pre-flight fetch and drew no pins.
+          this.viewer.camera.moveEnd?.raiseEvent?.();
           releaseOwnedFlight('applied');
         },
         cancel: () => releaseOwnedFlight('cancelled'),
@@ -678,6 +687,25 @@ export function decodeStyleParamState(params, styleName) {
 }
 
 /** Decode the shareable collapsed and pinned state for known panels. */
+/**
+ * Webcam Explore's search panel lives inside Data Layers, which a share
+ * link leaves collapsed. Restoring that layer opens Data Layers unless the
+ * link explicitly collapsed it.
+ */
+export function panelStateForRestoredLayers(layerState, panelState) {
+  const enabled = layerState?.enabledLayerIds;
+  if (!Array.isArray(enabled) || !enabled.includes('webcam-explore'))
+    return panelState;
+  const specs = Array.isArray(panelState?.specs)
+    ? panelState.specs.map((entry) => ({ ...entry }))
+    : [];
+  const dataPanel = specs.find((entry) => entry.id === 'data-panel');
+  if (dataPanel?.collapsed === true) return panelState;
+  if (dataPanel) dataPanel.collapsed = false;
+  else specs.push({ id: 'data-panel', collapsed: false });
+  return { specs };
+}
+
 export function decodePanelStateParams(params) {
   if (params.get('v') !== '2' || !params.has(SHARE_UI_STATE_PARAM)) return null;
   const raw = String(params.get(SHARE_UI_STATE_PARAM) || '').trim();

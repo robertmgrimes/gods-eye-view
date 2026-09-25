@@ -1,0 +1,301 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import * as Cesium from 'cesium';
+import { ShareLinkManager, panelStateForRestoredLayers } from '../sharelink.js';
+import { createWindyWebcamsLayer } from './windy/index.js';
+import { createKytcWebcamsLayer } from './kytc/index.js';
+import { createCwwpWebcamsLayer } from './cwwp/index.js';
+import { createAlgoWebcamsLayer } from './algo/index.js';
+import { createNpsNatureLayer } from './npsNature/index.js';
+import { createWebcamExploreLayer } from './webcamExplore/index.js';
+
+const HOME = { lat: 35.0914, lon: -82.5 };
+const LOUISVILLE = { lat: 38.25, lon: -85.76 };
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function viewerAt(place) {
+  const canvas = {
+    clientWidth: 800,
+    clientHeight: 600,
+    width: 800,
+    height: 600,
+    disableRootEvents: true,
+    onwheel: null,
+    addEventListener() {},
+    removeEventListener() {},
+    getBoundingClientRect() {
+      return { left: 0, top: 0, width: 800, height: 600 };
+    },
+  };
+  const camera = {
+    changed: new Cesium.Event(),
+    moveEnd: new Cesium.Event(),
+    positionCartographic: { height: 40000 },
+    pickEllipsoid() {
+      return Cesium.Cartesian3.fromDegrees(place.lon, place.lat);
+    },
+    flyTo(options) {
+      options?.complete?.();
+    },
+    setView() {},
+  };
+  return {
+    camera,
+    scene: { canvas, requestRender() {} },
+    dataSources: { add() {}, remove() {} },
+  };
+}
+
+function cameraRecord(id, place) {
+  return {
+    id,
+    latitude: place.lat,
+    longitude: place.lon,
+    title: id,
+    pin: true,
+    kind: 'still',
+    name: id,
+  };
+}
+
+function nearLouisville(query) {
+  if (query?.kind === 'bbox') {
+    return (
+      query.south <= LOUISVILLE.lat &&
+      query.north >= LOUISVILLE.lat &&
+      query.west <= LOUISVILLE.lon &&
+      query.east >= LOUISVILLE.lon
+    );
+  }
+  return (
+    Math.abs(Number(query?.lat) - LOUISVILLE.lat) < 0.2 &&
+    Math.abs(Number(query?.lon) - LOUISVILLE.lon) < 0.2
+  );
+}
+
+test('share restore reloads viewport cameras and a panel toggle draws every pin layer', async () => {
+  const place = { ...HOME };
+  const viewer = viewerAt(place);
+  const calls = [];
+  const windy = createWindyWebcamsLayer({
+    source: {
+      nearby(query) {
+        calls.push(['windy', query.lat, query.lon]);
+        const webcams = nearLouisville(query)
+          ? [cameraRecord('101', LOUISVILLE)]
+          : [];
+        return { webcams };
+      },
+      detail() {
+        return { webcam: cameraRecord('101', LOUISVILLE) };
+      },
+      forecast() {
+        return {};
+      },
+    },
+  });
+  const kytc = createKytcWebcamsLayer({
+    source: {
+      cameras(query) {
+        calls.push(['kytc', query]);
+        return {
+          cameras: nearLouisville(query)
+            ? [cameraRecord('202', LOUISVILLE)]
+            : [],
+        };
+      },
+    },
+  });
+  const cwwp = createCwwpWebcamsLayer({
+    source: {
+      cameras(query) {
+        calls.push(['cwwp', query]);
+        return {
+          cameras: nearLouisville(query)
+            ? [cameraRecord('d07-12', LOUISVILLE)]
+            : [],
+        };
+      },
+    },
+  });
+  const algo = createAlgoWebcamsLayer({
+    isEnabled: () => true,
+    source: {
+      cameras(query) {
+        calls.push(['algo', query]);
+        return {
+          cameras: nearLouisville(query)
+            ? [cameraRecord('303', LOUISVILLE)]
+            : [],
+        };
+      },
+    },
+  });
+  const nps = createNpsNatureLayer({
+    source: {
+      cameras() {
+        calls.push(['nps']);
+        return { cameras: [cameraRecord('old-faithful', LOUISVILLE)] };
+      },
+    },
+  });
+  const explore = createWebcamExploreLayer({
+    source: {
+      search() {
+        calls.push(['explore']);
+        return {
+          webcams: [
+            {
+              id: 'bern-1',
+              title: 'Bern',
+              page_url: 'https://www.webcamexplore.com/webcams/bern',
+              thumbnail_url: 'https://www.webcamexplore.com/thumb.jpg',
+            },
+          ],
+        };
+      },
+    },
+  });
+  const layers = [windy, kytc, cwwp, algo, nps, explore];
+  let share = null;
+  try {
+    for (const layer of layers) layer.init(viewer);
+    for (const layer of [windy, kytc, cwwp, algo, nps]) {
+      layer.enable(viewer);
+      await layer.update(viewer);
+    }
+    assert.equal(windy.getStats().count, 0);
+    assert.equal(kytc.getStats().count, 0);
+    assert.equal(cwwp.getStats().count, 0);
+    assert.equal(algo.getStats().count, 0);
+    assert.equal(nps.getStats().count, 1);
+    place.lat = LOUISVILLE.lat;
+    place.lon = LOUISVILLE.lon;
+    share = new ShareLinkManager(viewer);
+    await share.applyState({
+      lat: LOUISVILLE.lat,
+      lon: LOUISVILLE.lon,
+      alt: 40000,
+      heading: 0,
+      pitch: -35,
+      roll: 0,
+    });
+    await delay(500);
+    for (const id of ['windy', 'kytc', 'cwwp', 'algo', 'nps']) {
+      assert.ok(
+        calls.some((call) => call[0] === id),
+        `${id} fetch ran`,
+      );
+    }
+    assert.equal(windy.getStats().count, 1);
+    assert.equal(kytc.getStats().count, 1);
+    assert.equal(cwwp.getStats().count, 1);
+    assert.equal(algo.getStats().count, 1);
+    explore.enable(viewer);
+    await explore.search('Bern');
+    assert.equal(explore.getSnapshot().webcams.length, 1);
+  } finally {
+    for (const layer of layers) layer.destroy(viewer);
+    share?.destroy();
+  }
+});
+
+test('panel toggle fetches and draws pins when the camera is already on target', async () => {
+  const place = { ...LOUISVILLE };
+  const viewer = viewerAt(place);
+  const calls = [];
+  const layers = [
+    createWindyWebcamsLayer({
+      source: {
+        nearby(query) {
+          calls.push('windy');
+          return {
+            webcams: nearLouisville(query)
+              ? [cameraRecord('101', LOUISVILLE)]
+              : [],
+          };
+        },
+        detail() {
+          return { webcam: cameraRecord('101', LOUISVILLE) };
+        },
+        forecast() {
+          return {};
+        },
+      },
+    }),
+    createKytcWebcamsLayer({
+      source: {
+        cameras(query) {
+          calls.push('kytc');
+          return {
+            cameras: nearLouisville(query)
+              ? [cameraRecord('202', LOUISVILLE)]
+              : [],
+          };
+        },
+      },
+    }),
+    createCwwpWebcamsLayer({
+      source: {
+        cameras(query) {
+          calls.push('cwwp');
+          return {
+            cameras: nearLouisville(query)
+              ? [cameraRecord('d07-12', LOUISVILLE)]
+              : [],
+          };
+        },
+      },
+    }),
+    createAlgoWebcamsLayer({
+      isEnabled: () => true,
+      source: {
+        cameras(query) {
+          calls.push('algo');
+          return {
+            cameras: nearLouisville(query)
+              ? [cameraRecord('303', LOUISVILLE)]
+              : [],
+          };
+        },
+      },
+    }),
+    createNpsNatureLayer({
+      source: {
+        cameras() {
+          calls.push('nps');
+          return { cameras: [cameraRecord('old-faithful', LOUISVILLE)] };
+        },
+      },
+    }),
+  ];
+  try {
+    for (const layer of layers) {
+      layer.init(viewer);
+      layer.enable(viewer);
+      await layer.update(viewer);
+      assert.equal(layer.getStats().count, 1, layer.id);
+    }
+    assert.deepEqual(calls.sort(), ['algo', 'cwwp', 'kytc', 'nps', 'windy']);
+  } finally {
+    for (const layer of layers) layer.destroy(viewer);
+  }
+});
+
+test('hash restore opens Data Layers when Webcam Explore is enabled', () => {
+  const opened = panelStateForRestoredLayers(
+    { enabledLayerIds: ['webcam-explore'] },
+    null,
+  );
+  assert.deepEqual(opened, {
+    specs: [{ id: 'data-panel', collapsed: false }],
+  });
+  const explicit = panelStateForRestoredLayers(
+    { enabledLayerIds: ['webcam-explore'] },
+    { specs: [{ id: 'data-panel', collapsed: true }] },
+  );
+  assert.equal(explicit.specs[0].collapsed, true);
+});

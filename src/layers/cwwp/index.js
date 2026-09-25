@@ -267,6 +267,10 @@ export function createCwwpWebcamsLayer({ source } = {}) {
     const viewer = state.viewer;
     const canvas = viewer?.scene?.canvas;
     if (!viewer || !canvas) return false;
+    // Before the first rendered frame the window transform is empty. Dropping
+    // every camera then leaves the layer empty, because share restore does
+    // not move the camera again. Keep them until a frame can project.
+    if (!viewer.scene.frameState) return true;
     let win;
     try {
       win = Cesium.SceneTransforms.worldToWindowCoordinates(

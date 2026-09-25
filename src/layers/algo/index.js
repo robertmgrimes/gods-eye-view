@@ -267,6 +267,7 @@ export function createAlgoWebcamsLayer({
     const viewer = state.viewer;
     const canvas = viewer?.scene?.canvas;
     if (!viewer || !canvas) return false;
+    if (!viewer.scene.frameState) return true;
     let win;
     try {
       win = Cesium.SceneTransforms.worldToWindowCoordinates(
