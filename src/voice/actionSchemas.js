@@ -146,6 +146,7 @@ const schemas = [
             'ky-kytc-webcams',
             'ca-cwwp-webcams',
             'al-algo-webcams',
+            'webcam-explore',
           ],
         },
         enabled: {
@@ -183,6 +184,7 @@ const schemas = [
             'ky-kytc-webcams',
             'ca-cwwp-webcams',
             'al-algo-webcams',
+            'webcam-explore',
           ],
         },
       },

@@ -70,6 +70,11 @@ export class LayerPresentation {
   mount(container) {
     this.panel.mount(container);
   }
+  /** Hand the Webcam Explore search factory to the panel (see LayerPanel). */
+  attachWebcamExplore(factory) {
+    if (factory) this.panel.attachWebcamExplore(factory);
+    else this._panel?.attachWebcamExplore(null);
+  }
   /** Hand the Recent Imagery readout factory to the panel (see LayerPanel). */
   attachRecentImagery(factory) {
     // Detaching never builds a panel that teardown already released.

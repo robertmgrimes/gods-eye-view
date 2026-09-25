@@ -1,0 +1,132 @@
+/* Webcam Explore discovery cards, mounted under the Cameras row. */
+.webcam-explore-slot[hidden] {
+  display: none !important;
+}
+
+.webcam-explore {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.webcam-explore[hidden] {
+  display: none !important;
+}
+
+.webcam-explore-note,
+.webcam-explore-status,
+.webcam-explore-meta,
+.webcam-explore-live {
+  margin: 0;
+  color: var(--text-secondary);
+  font: 10px/1.4 var(--font-mono);
+  letter-spacing: 0.2px;
+}
+
+.webcam-explore-form {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.webcam-explore-query {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  font: 12px/1 var(--font-sans);
+}
+
+.webcam-explore-submit,
+.webcam-explore-mode,
+.webcam-explore-choice {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 8px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  font: 10px/1 var(--font-mono);
+  letter-spacing: 0.4px;
+  cursor: pointer;
+}
+
+.webcam-explore-mode[aria-pressed='true'],
+.webcam-explore-choice:hover,
+.webcam-explore-submit:hover,
+.webcam-explore-mode:hover {
+  border-color: rgba(0, 212, 255, 0.55);
+  color: #dff8ff;
+}
+
+.webcam-explore-modes,
+.webcam-explore-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.webcam-explore-choices p {
+  flex: 1 0 100%;
+  margin: 0 0 2px;
+  color: var(--text-secondary);
+  font: 10px/1.4 var(--font-mono);
+}
+
+.webcam-explore-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.webcam-explore-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.webcam-explore-thumb {
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.webcam-explore-thumb-empty {
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  font: 10px var(--font-mono);
+}
+
+.webcam-explore-title {
+  margin: 0;
+  color: var(--text-primary);
+  font: 600 12px/1.3 var(--font-sans);
+}
+
+.webcam-explore-live.is-live {
+  color: #8dffb0;
+}
+
+.webcam-explore-open {
+  color: #9be7ff;
+  font: 11px/1.3 var(--font-sans);
+  text-decoration: none;
+}
+
+.webcam-explore-open:hover {
+  text-decoration: underline;
+}

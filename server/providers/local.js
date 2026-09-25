@@ -29,6 +29,7 @@ import { windyProxy } from './windy.js';
 import { kytcProxy } from './kytc.js';
 import { cwwpProxy } from './cwwp.js';
 import { algoProxy } from './algo.js';
+import { webcamExploreProxy } from './webcamExplore.js';
 
 /** Construct the local provider plugins in their established order. */
 function localProviderPlugins() {
@@ -60,6 +61,7 @@ function localProviderPlugins() {
     kytcProxy(),
     cwwpProxy(),
     algoProxy(),
+    webcamExploreProxy(),
     weatherProxy(),
     cycloneProxy(),
     firePerimetersProxy(),

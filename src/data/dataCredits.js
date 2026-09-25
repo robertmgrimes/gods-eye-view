@@ -354,6 +354,18 @@ export const ALGO_CREDIT = {
     'WARNING: undocumented public JSON, not a stable contracted API, not cleared for production. Stills only.',
 };
 
+/**
+ * Registered only while Webcam Explore discovery is enabled. Pages stay on
+ * webcamexplore.com. GEV does not play those cameras.
+ */
+export const WEBCAM_EXPLORE_CREDIT = {
+  key: 'webcam-explore',
+  html:
+    'Webcam Explore discovery: ' +
+    '<a href="https://www.webcamexplore.com/mcp" target="_blank" rel="noopener">webcamexplore.com</a>. ' +
+    'Thumbnails and page links only. GEV does not play these cameras.',
+};
+
 /** Registered when the first Natural Earth region outline resolves (public
  * domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {

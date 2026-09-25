@@ -3285,6 +3285,30 @@ test('ALGO names toggle only the Alabama camera layer through the normal voice a
   }
 });
 
+test('Webcam Explore names toggle only the discovery layer', async () => {
+  globalThis.window = globalThis.window || { clearTimeout, setTimeout, requestIdleCallback: null };
+  const viewer = { clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: { moveEnd: { addEventListener() {} } } };
+  const calls = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['webcam-explore', { module: {} }]]),
+    getAll: () => [{ id: 'webcam-explore', name: 'Webcam Explore' }],
+    isEnabled: () => enabled,
+    setEnabled: async (id, value) => { calls.push([id, value]); enabled = value; return true; },
+  };
+  const runner = createGevActionRunner({ viewer, styleManager: {}, dataManager });
+  for (const alias of ['webcam-explore', 'webcam explore', 'explore webcams']) {
+    for (const value of [true, false]) {
+      const result = await runner('set_layer_visibility', { layerId: alias, enabled: value });
+      assert.equal(result.ok, true);
+      assert.equal(result.layerId, 'webcam-explore');
+      assert.deepEqual(calls.at(-1), ['webcam-explore', value]);
+    }
+  }
+});
+
 test('ISS voice lookup uses the registered satellite instance', async () => {
   const calls = [];
   const viewer = {

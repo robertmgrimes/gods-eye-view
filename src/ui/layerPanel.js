@@ -38,6 +38,7 @@ const PANEL_GROUPS = [
       'ky-kytc-webcams',
       'ca-cwwp-webcams',
       'al-algo-webcams',
+      'webcam-explore',
       'recent-imagery',
     ],
   },
@@ -84,6 +85,7 @@ const PANEL_LABELS = {
   'ky-kytc-webcams': 'KYTC Cameras',
   'ca-cwwp-webcams': 'Caltrans CWWP',
   'al-algo-webcams': 'ALGO (experimental)',
+  'webcam-explore': 'Webcam Explore',
   'alpr-cameras': 'Mapped ALPR Cameras',
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',
@@ -141,6 +143,8 @@ export class LayerPanel {
     this._cancelRowControlsRefresh = null;
     this._recentImageryFactory = null;
     this._recentImageryPanel = null;
+    this._webcamExploreFactory = null;
+    this._webcamExplorePanel = null;
   }
   mount(container) {
     if (this._destroyed) return;
@@ -155,6 +159,23 @@ export class LayerPanel {
     });
     this._mountRecentImagery();
     this._renderToggles();
+  }
+  /**
+   * Host Webcam Explore search under its Cameras row. The application
+   * supplies the factory once the layer exists.
+   * @param {((container: HTMLElement) => { destroy: () => void } | null) | null} factory
+   */
+  attachWebcamExplore(factory) {
+    if (this._destroyed) return;
+    this._webcamExploreFactory = typeof factory === 'function' ? factory : null;
+    this._mountWebcamExplore();
+  }
+  _mountWebcamExplore() {
+    this._webcamExplorePanel?.destroy();
+    this._webcamExplorePanel = null;
+    const slot = this._toggleContainer?.querySelector?.('.webcam-explore-slot');
+    if (slot && this._webcamExploreFactory)
+      this._webcamExplorePanel = this._webcamExploreFactory(slot) || null;
   }
   /**
    * Host the Recent Imagery readout in its rail body, like the weather
@@ -195,11 +216,16 @@ export class LayerPanel {
     this._recentImageryPanel?.destroy();
     this._recentImageryPanel = null;
     this._recentImageryFactory = null;
+    this._webcamExplorePanel?.destroy();
+    this._webcamExplorePanel = null;
+    this._webcamExploreFactory = null;
     this._toggleContainer = null;
   }
   _renderToggles() {
     if (this._destroyed || !this._toggleContainer) return;
     this._releaseBindings();
+    this._webcamExplorePanel?.destroy();
+    this._webcamExplorePanel = null;
     this._toggleContainer.innerHTML = '';
 
     const generation = this._generation;
@@ -338,8 +364,16 @@ export class LayerPanel {
         }
       }
 
+      if (layer.id === 'webcam-explore') {
+        const slot = document.createElement('div');
+        slot.className = 'webcam-explore-slot';
+        slot.hidden = !layer.enabled;
+        row.appendChild(slot);
+      }
+
       this._toggleContainer.appendChild(row);
     }
+    this._mountWebcamExplore();
     this._refreshWeatherPanel();
   }
 
@@ -524,6 +558,8 @@ export class LayerPanel {
         layer,
         row.querySelector('.data-row-list'),
       );
+      const explore = row.querySelector('.webcam-explore-slot');
+      if (explore) explore.hidden = !layer.enabled;
     }
     this._refreshWeatherPanel();
   }
