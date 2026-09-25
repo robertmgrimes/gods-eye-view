@@ -6,6 +6,7 @@ import {
 import { createCctvSource } from '../layers/cctv/source.js';
 import { createWindySource } from '../layers/windy/source.js';
 import { createKytcSource } from '../layers/kytc/source.js';
+import { createCwwpSource } from '../layers/cwwp/source.js';
 import { createRadioSource } from '../layers/radio/source.js';
 import { createTransitSource } from '../layers/transit/source.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
@@ -33,6 +34,7 @@ export function createStandaloneLayerSources() {
     cctv: createCctvSource(),
     windyWebcams: createWindySource(),
     kytcWebcams: createKytcSource(),
+    cwwpWebcams: createCwwpSource(),
     radio: createRadioSource(),
     traffic: createTrafficSource(),
     transit: createTransitSource(),

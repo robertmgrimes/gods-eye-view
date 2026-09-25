@@ -32,7 +32,13 @@ const PANEL_GROUPS = [
   },
   {
     label: 'Cameras',
-    ids: ['cctv', 'windy-webcams', 'ky-kytc-webcams', 'recent-imagery'],
+    ids: [
+      'cctv',
+      'windy-webcams',
+      'ky-kytc-webcams',
+      'ca-cwwp-webcams',
+      'recent-imagery',
+    ],
   },
   {
     label: 'Infrastructure',
@@ -75,6 +81,7 @@ const PANEL_LABELS = {
   cctv: 'Cameras',
   'windy-webcams': 'Windy Webcams',
   'ky-kytc-webcams': 'KYTC Cameras',
+  'ca-cwwp-webcams': 'Caltrans CWWP',
   'alpr-cameras': 'Mapped ALPR Cameras',
   'local-datacenters': 'Data Centers',
   'local-firms': 'Active Fires',

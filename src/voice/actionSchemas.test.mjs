@@ -27,9 +27,9 @@ test('the complete Realtime tool payload pins the additive analyst, satellite, L
     .digest('hex');
   assert.equal(
     digest,
-    // Re-derived for the additive `ky-kytc-webcams` visibility value and the
+    // Re-derived for the additive `ca-cwwp-webcams` visibility value and the
     // Cyber HUD layout; the separate sonar tool is excluded above.
-    '43ae2f81206eea66f7067eab22ec9ab891cf62dce1e24236b38548589ea33562',
+    'fea211ed56586adc1f3f9892d792c28f058077cd6945a1e5b366a76253b74669',
   );
 });
 
@@ -110,12 +110,16 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'fire-perimeters',
         'windy-webcams',
         'ky-kytc-webcams',
+        'ca-cwwp-webcams',
       ].includes(key),
   );
   const menu = legacy.find((tool) => tool.name === 'show_data_layers_menu')
     .parameters.properties.layerId;
   menu.enum = menu.enum.filter(
-    (key) => key !== 'windy-webcams' && key !== 'ky-kytc-webcams',
+    (key) =>
+      key !== 'windy-webcams' &&
+      key !== 'ky-kytc-webcams' &&
+      key !== 'ca-cwwp-webcams',
   );
   for (const tool of legacy) {
     for (const value of Object.values(tool.parameters.properties)) {
