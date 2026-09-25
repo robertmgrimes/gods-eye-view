@@ -201,8 +201,11 @@ test('no unchanged Realtime tool definition drifts silently', () => {
     .update(JSON.stringify(unchanged))
     .digest('hex')
     .slice(0, 16);
-  // Analyst additions and ISS wording correction are explicitly excluded above; all other tool definitions retain their pin.
-  assert.equal(digest, '91935845ef2598b1', 'an unchanged Realtime tool definition drifted');
+  // Analyst additions and ISS wording correction are explicitly excluded above.
+  // The camera stack then added one id to show_data_layers_menu only:
+  // windy-webcams, ky-kytc-webcams, ca-cwwp-webcams, al-algo-webcams,
+  // webcam-explore, nps-nature-cameras. main still matches 91935845ef2598b1.
+  assert.equal(digest, 'e2b9abad0be52d36', 'an unchanged Realtime tool definition drifted');
 });
 
 test('Radio volume and mission speed share the Sharpen slider visual language', () => {

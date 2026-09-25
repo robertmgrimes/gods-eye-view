@@ -27,9 +27,9 @@ test('the complete Realtime tool payload pins the additive analyst, satellite, L
     .digest('hex');
   assert.equal(
     digest,
-    // Re-derived for the additive `webcam-explore` visibility value and the
-    // Cyber HUD layout; the separate sonar tool is excluded above.
-    'd4b62b14de983997720efbf404d186e73939b14cbc5c0acceb4de050b3e90a33',
+    // Re-derived for the additive `nps-nature-cameras` visibility value.
+    // The separate sonar tool is excluded above.
+    '1895d96eb3804d1b33fa6cb60054d5537bbdfe0d703d2b52b9b1612ab57a3738',
   );
 });
 
@@ -113,6 +113,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'ca-cwwp-webcams',
         'al-algo-webcams',
         'webcam-explore',
+        'nps-nature-cameras',
       ].includes(key),
   );
   const menu = legacy.find((tool) => tool.name === 'show_data_layers_menu')
@@ -123,7 +124,8 @@ test('all legacy action arguments are byte-identical after removing the delibera
       key !== 'ky-kytc-webcams' &&
       key !== 'ca-cwwp-webcams' &&
       key !== 'al-algo-webcams' &&
-      key !== 'webcam-explore',
+      key !== 'webcam-explore' &&
+      key !== 'nps-nature-cameras',
   );
   for (const tool of legacy) {
     for (const value of Object.values(tool.parameters.properties)) {

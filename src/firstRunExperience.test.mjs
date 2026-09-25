@@ -667,12 +667,14 @@ test('the voice TOOL SCHEMA matches the pinned release — the mission mapping i
   // Cyber deliberately adds one layout; first-run missions still change no tools.
   hudLayout.enum = hudLayout.enum.filter((layout) => layout !== 'cyber');
   const block = JSON.stringify(legacyTools);
-  // Re-derived for the additive `local-adsb` set_layer_visibility value and
-  // its common-name mapping; the missions still ride existing tools.
-  assert.equal(block.length, 27432, 'serialized tool schema length drifted');
+  // Re-derived after the camera stack added one layer id to set_layer_visibility
+  // and show_data_layers_menu: windy-webcams, ky-kytc-webcams, ca-cwwp-webcams,
+  // al-algo-webcams, webcam-explore, nps-nature-cameras. main still matches the
+  // previous pin (27432 / a2a4a787…). The missions still ride existing tools.
+  assert.equal(block.length, 27648, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'a2a4a787f4528f75b01f3f42caec636f29c37452c0d45b11f4f986171d6be57d',
+    'e346ae973967dab24510d34656a7b32dae17528a8a56e322ffc147819fc10737',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(new URL('../server/providers/openai/instructions.js', import.meta.url), 'utf8');

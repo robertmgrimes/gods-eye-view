@@ -1,0 +1,115 @@
+.nps-nature-links {
+  margin: 8px 0 4px;
+  padding: 0 4px 4px;
+}
+
+.nps-nature-links[hidden] {
+  display: none;
+}
+
+.nps-nature-links-note,
+.nps-nature-links-list {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.nps-nature-links-list {
+  padding-left: 16px;
+}
+
+.nps-nature-links-list a {
+  color: var(--text-primary);
+}
+
+.nps-nature-popover {
+  position: fixed;
+  z-index: 140;
+  width: min(320px, calc(100vw - 24px));
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  font-family: var(--font-sans);
+}
+
+.nps-nature-popover[hidden] {
+  display: none;
+}
+
+.nps-nature-popover-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nps-nature-popover-title {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.nps-nature-popover-close,
+.nps-nature-popover-action {
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border-radius: var(--btn-radius);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nps-nature-popover-close {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.nps-nature-popover-meta,
+.nps-nature-popover-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.nps-nature-popover-still {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.nps-nature-popover-link {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.nps-nature-popover-error {
+  margin: 0;
+  color: #ffb4b4;
+  font-size: 12px;
+}
+
+.nps-nature-popover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nps-nature-popover-action {
+  padding: 6px 10px;
+  font-size: 12px;
+}

@@ -14,6 +14,7 @@ import { createApplicationKytcWebcams } from './layers/kytcWebcams.js';
 import { createApplicationCwwpWebcams } from './layers/cwwpWebcams.js';
 import { createApplicationAlgoWebcams } from './layers/algoWebcams.js';
 import { createApplicationWebcamExplore } from './layers/webcamExplore.js';
+import { createApplicationNpsNature } from './layers/npsNatureWebcams.js';
 import { createApplicationRadio } from './layers/radio.js';
 import { createApplicationTraffic } from './layers/traffic.js';
 import { createApplicationBikeshare } from './layers/bikeshare.js';
@@ -45,6 +46,7 @@ const SOURCE_METHODS = Object.freeze({
   cwwpWebcams: ['cameras', 'warm'],
   algoWebcams: ['cameras', 'warm'],
   webcamExplore: ['search', 'trending', 'popular', 'byCategory'],
+  npsNature: ['cameras', 'warm'],
   radio: ['getDirectory', 'recordClick'],
   traffic: [
     'requestRoads',
@@ -167,6 +169,7 @@ export function createApplicationCatalog({
         createApplicationCwwpWebcams({ source: sources.cwwpWebcams }),
         createApplicationAlgoWebcams({ source: sources.algoWebcams }),
         createApplicationWebcamExplore({ source: sources.webcamExplore }),
+        createApplicationNpsNature({ source: sources.npsNature }),
         createApplicationRadio({ surface, source: sources.radio }),
         createApplicationTransit({ surface, source: sources.transit }),
         createApplicationBikeshare({ source: sources.bikeshare }),

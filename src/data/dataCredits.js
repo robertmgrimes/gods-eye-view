@@ -366,6 +366,18 @@ export const WEBCAM_EXPLORE_CREDIT = {
     'Thumbnails and page links only. GEV does not play these cameras.',
 };
 
+/**
+ * Registered only while the curated NPS / nature layer is enabled.
+ * Stills and official page links. This is not an NPS endorsement.
+ */
+export const NPS_NATURE_CREDIT = {
+  key: 'nps-nature',
+  html:
+    'National Park Service webcams: ' +
+    '<a href="https://www.nps.gov/yell/learn/photosmultimedia/webcams.htm" target="_blank" rel="noopener">nps.gov</a>. ' +
+    'Stills and links only. Positions are approximate. God’s Eye View is not endorsed by the National Park Service.',
+};
+
 /** Registered when the first Natural Earth region outline resolves (public
  * domain — no attribution required; credited as a courtesy). */
 export const NATURAL_EARTH_CREDIT = {
