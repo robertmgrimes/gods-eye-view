@@ -9,6 +9,11 @@ import {
 } from './model.js';
 import { createCwwpPopover } from './popover.js';
 import {
+  keepSearchHold,
+  rememberSearchCamera,
+  revealScreen,
+} from '../searchHold.js';
+import {
   AIM_LABEL,
   EMPTY_IN_VIEW_LABEL,
   EMPTY_OUTSIDE_LABEL,
@@ -357,6 +362,7 @@ export function createCwwpWebcamsLayer({ source } = {}) {
           projectsOnScreen(record),
       );
       state.byId = new Map(state.records.map((record) => [record.id, record]));
+      keepSearchHold(state);
       if (state.selectedId && !state.byId.has(state.selectedId)) closePopover();
       state.lastUpdate = Number(payload?.fetchedAt) || Date.now();
       state.stale = payload?.stale === true;
@@ -481,6 +487,12 @@ export function createCwwpWebcamsLayer({ source } = {}) {
       state.viewer = null;
       state.lastUpdate = null;
       state.count = 0;
+    },
+    revealSearchCamera(record) {
+      if (!state.enabled || !rememberSearchCamera(state, record)) return false;
+      renderPins();
+      openCamera(record.id, revealScreen(state.viewer));
+      return true;
     },
     setRowControlsListener(listener) {
       state.controlsListener = typeof listener === 'function' ? listener : null;

@@ -149,6 +149,8 @@ export class LayerPanel {
     this._webcamExplorePanel = null;
     this._npsNatureFactory = null;
     this._npsNaturePanel = null;
+    this._findCamerasFactory = null;
+    this._findCamerasPanel = null;
   }
   mount(container) {
     if (this._destroyed) return;
@@ -185,6 +187,23 @@ export class LayerPanel {
    * Host curated NPS link-outs under the NPS & nature row.
    * @param {((container: HTMLElement) => { destroy: () => void } | null) | null} factory
    */
+  /**
+   * Host Find cameras under the Cameras heading. The search is not a layer:
+   * it stays visible while the individual camera layers are off.
+   * @param {((container: HTMLElement) => { destroy: () => void } | null) | null} factory
+   */
+  attachFindCameras(factory) {
+    if (this._destroyed) return;
+    this._findCamerasFactory = typeof factory === 'function' ? factory : null;
+    this._mountFindCameras();
+  }
+  _mountFindCameras() {
+    this._findCamerasPanel?.destroy();
+    this._findCamerasPanel = null;
+    const slot = this._toggleContainer?.querySelector?.('.find-cameras-slot');
+    if (slot && this._findCamerasFactory)
+      this._findCamerasPanel = this._findCamerasFactory(slot) || null;
+  }
   attachNpsNature(factory) {
     if (this._destroyed) return;
     this._npsNatureFactory = typeof factory === 'function' ? factory : null;
@@ -242,6 +261,9 @@ export class LayerPanel {
     this._npsNaturePanel?.destroy();
     this._npsNaturePanel = null;
     this._npsNatureFactory = null;
+    this._findCamerasPanel?.destroy();
+    this._findCamerasPanel = null;
+    this._findCamerasFactory = null;
     this._toggleContainer = null;
   }
   _renderToggles() {
@@ -251,6 +273,8 @@ export class LayerPanel {
     this._webcamExplorePanel = null;
     this._npsNaturePanel?.destroy();
     this._npsNaturePanel = null;
+    this._findCamerasPanel?.destroy();
+    this._findCamerasPanel = null;
     this._toggleContainer.innerHTML = '';
 
     const generation = this._generation;
@@ -271,6 +295,11 @@ export class LayerPanel {
         heading.className = 'data-layer-group-heading';
         heading.textContent = group;
         this._toggleContainer.appendChild(heading);
+        if (group === 'Cameras') {
+          const slot = document.createElement('div');
+          slot.className = 'find-cameras-slot';
+          this._toggleContainer.appendChild(slot);
+        }
       }
       previousGroup = group;
       const row = document.createElement('div');
@@ -407,6 +436,7 @@ export class LayerPanel {
     }
     this._mountWebcamExplore();
     this._mountNpsNature();
+    this._mountFindCameras();
     this._refreshWeatherPanel();
   }
 

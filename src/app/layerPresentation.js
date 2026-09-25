@@ -82,6 +82,11 @@ export class LayerPresentation {
     else this._panel?.attachRecentImagery(null);
   }
   /** Hand the NPS & nature cameras panel factory to the panel. */
+  /** Hand the Find cameras factory to the panel (see LayerPanel). */
+  attachFindCameras(factory) {
+    if (factory) this.panel.attachFindCameras(factory);
+    else this._panel?.attachFindCameras(null);
+  }
   attachNpsNature(factory) {
     if (factory) this.panel.attachNpsNature(factory);
     else this._panel?.attachNpsNature(null);

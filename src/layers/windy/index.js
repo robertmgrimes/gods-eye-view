@@ -2,6 +2,11 @@ import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import { imageUrlFresh, windyClientMessage } from './model.js';
 import { createWindyPopover } from './popover.js';
+import {
+  keepSearchHold,
+  rememberSearchCamera,
+  revealScreen,
+} from '../searchHold.js';
 import { LAYER_ID, NEARBY_RADIUS_KM, REQUEST_DEBOUNCE_MS } from './policy.js';
 
 const PIN = Cesium.Color.fromCssColorString('#3ec6ff');
@@ -286,6 +291,7 @@ export function createWindyWebcamsLayer({ source } = {}) {
           Number.isFinite(record.longitude),
       );
       state.byId = new Map(state.records.map((record) => [record.id, record]));
+      keepSearchHold(state);
       if (state.selectedId && !state.byId.has(state.selectedId)) closePopover();
       state.lastUpdate = Number(payload?.fetchedAt) || Date.now();
       state.stale = payload?.stale === true;
@@ -445,6 +451,12 @@ export function createWindyWebcamsLayer({ source } = {}) {
       state.viewer = null;
       state.lastUpdate = null;
       state.count = 0;
+    },
+    revealSearchCamera(record) {
+      if (!state.enabled || !rememberSearchCamera(state, record)) return false;
+      renderPins();
+      openWebcam(record.id, revealScreen(state.viewer));
+      return true;
     },
     setRowControlsListener(listener) {
       state.controlsListener = typeof listener === 'function' ? listener : null;
