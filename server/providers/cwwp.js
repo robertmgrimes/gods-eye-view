@@ -19,6 +19,7 @@ import {
 import {
   DISTRICT_FETCH_CONCURRENCY,
   DISTRICT_JSON_MAX_BYTES,
+  DISTRICT_WARM_CONCURRENCY,
   DISTRICTS,
   DISTRICT_FAIL_RETRY_MS,
   LIST_CACHE_TTL_MS,
@@ -27,6 +28,7 @@ import {
   UPSTREAM_ATTEMPTS,
   stillRefreshMs,
 } from '../../src/layers/cwwp/policy.js';
+import { createCwwpDiskCache } from './cwwpDiskCache.js';
 
 const IMAGE_TYPES = new Set([
   'image/jpeg',
@@ -55,7 +57,7 @@ const RETRY_STATUSES = new Set([429, 502, 503, 504]);
  *
  * @returns {import('vite').Plugin}
  */
-export function cwwpProxy() {
+export function cwwpProxy({ disk = createCwwpDiskCache(), warm = true } = {}) {
   /** @type {Map<number, { at: number, stale: boolean, failed: boolean, cameras: object[] }>} */
   const districts = new Map();
   /** @type {Map<string, { at: number, bytes: Uint8Array | null, contentType: string, kept?: boolean }>} */
@@ -167,49 +169,82 @@ export function cwwpProxy() {
     return cameras;
   }
 
+  function remember(district, entry) {
+    districts.set(district, entry);
+    return entry;
+  }
+
+  function freshEnough(entry) {
+    return entry && !entry.failed && Date.now() - entry.at < LIST_CACHE_TTL_MS;
+  }
+
+  async function storeFresh(district, cameras) {
+    const entry = {
+      at: Date.now(),
+      stale: false,
+      failed: false,
+      cameras,
+    };
+    remember(district, entry);
+    if (disk) await disk.write(district, cameras, entry.at).catch(() => {});
+    return entry;
+  }
+
+  function refreshInBackground(district) {
+    coalesceProxyRequest(districtInflight, String(district), async () => {
+      const cameras = await fetchDistrict(district);
+      return storeFresh(district, cameras);
+    }).promise.catch(() => {});
+  }
+
   async function loadDistrict(district) {
     const cached = districts.get(district);
-    if (cached && !cached.failed && Date.now() - cached.at < LIST_CACHE_TTL_MS)
-      return cached;
+    if (freshEnough(cached)) return cached;
     if (cached?.failed && Date.now() - cached.at < DISTRICT_FAIL_RETRY_MS)
       return cached;
+    const diskHit = disk ? await disk.read(district).catch(() => null) : null;
+    if (diskHit?.cameras) {
+      const entry = remember(district, {
+        at: diskHit.at,
+        stale: Date.now() - diskHit.at >= LIST_CACHE_TTL_MS,
+        failed: false,
+        cameras: diskHit.cameras,
+      });
+      if (entry.stale) refreshInBackground(district);
+      return entry;
+    }
     try {
       const { promise } = coalesceProxyRequest(
         districtInflight,
         String(district),
         async () => {
           const cameras = await fetchDistrict(district);
-          const entry = {
-            at: Date.now(),
-            stale: false,
-            failed: false,
-            cameras,
-          };
-          districts.set(district, entry);
-          return entry;
+          return storeFresh(district, cameras);
         },
       );
       return await promise;
     } catch {
       if (cached?.cameras?.length) {
-        const kept = {
+        return remember(district, {
           at: Date.now(),
           stale: true,
           failed: false,
           cameras: cached.cameras,
-        };
-        districts.set(district, kept);
-        return kept;
+        });
       }
-      const failed = {
+      return remember(district, {
         at: Date.now(),
         stale: true,
         failed: true,
         cameras: [],
-      };
-      districts.set(district, failed);
-      return failed;
+      });
     }
+  }
+
+  function warmDistricts() {
+    runPool(DISTRICTS, DISTRICT_WARM_CONCURRENCY, (district) =>
+      loadDistrict(district),
+    ).catch(() => {});
   }
 
   async function loadCatalog(wanted = DISTRICTS) {
@@ -523,7 +558,13 @@ export function cwwpProxy() {
 
   return {
     name: 'cwwp-proxy',
-    configureServer: installMiddleware,
-    configurePreviewServer: installMiddleware,
+    configureServer(server) {
+      installMiddleware(server);
+      if (warm) warmDistricts();
+    },
+    configurePreviewServer(server) {
+      installMiddleware(server);
+      if (warm) warmDistricts();
+    },
   };
 }

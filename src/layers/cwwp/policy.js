@@ -78,6 +78,18 @@ export const DISTRICT_BOUNDS = Object.freeze({
 /** Oblique views stay inside this radius instead of the horizon rectangle. */
 export const GROUND_FOOTPRINT_CAP_KM = 50;
 
+/** Disk copies older than this are discarded and fetched again. */
+export const DISTRICT_DISK_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** Oldest district files are evicted past this cap. */
+export const DISTRICT_DISK_MAX_BYTES = 50 * 1024 * 1024;
+
+/** Background warm at dev-server start. Low so it does not stampede Caltrans. */
+export const DISTRICT_WARM_CONCURRENCY = 2;
+
+/** Find cameras waits longer for Caltrans than for the other sources. */
+export const CWWP_SEARCH_TIMEOUT_MS = 12_000;
+
 export const EMPTY_IN_VIEW_LABEL = 'No Caltrans cameras in this view';
 export const EMPTY_OUTSIDE_LABEL = 'No Caltrans cameras in this view';
 export const LAYER_INFO = 'Caltrans CWWP · California traffic camera stills';

@@ -47,10 +47,14 @@ function snapshot(near, byName, statuses) {
 async function runAdapter(adapter, request, bucket) {
   const controller = new AbortController();
   let timedOut = false;
+  const budget =
+    Number(adapter.timeoutMs) > 0
+      ? Number(adapter.timeoutMs)
+      : request.timeoutMs;
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, request.timeoutMs);
+  }, budget);
   const onParent = () => controller.abort();
   request.signal?.addEventListener('abort', onParent);
   const row = bucket.statuses.find((entry) => entry.id === adapter.id);

@@ -1,5 +1,6 @@
 import { createCwwpSource } from '../../../layers/cwwp/source.js';
 import { districtsForQuery, parseNearby } from '../../../layers/cwwp/model.js';
+import { CWWP_SEARCH_TIMEOUT_MS } from '../../../layers/cwwp/policy.js';
 import { clampHits } from './shared.js';
 
 /** Caltrans CWWP stills. No key. */
@@ -11,6 +12,7 @@ export function createCwwpAdapter({ source = createCwwpSource() } = {}) {
     enabled() {
       return true;
     },
+    timeoutMs: CWWP_SEARCH_TIMEOUT_MS,
     async searchNear({ lat, lon, radiusKm, limit, signal } = {}) {
       const query = parseNearby({ lat, lon, radiusKm }) || {
         kind: 'nearby',
@@ -29,10 +31,16 @@ export function createCwwpAdapter({ source = createCwwpSource() } = {}) {
             const rows = Array.isArray(payload?.cameras) ? payload.cameras : [];
             cameras.push(...rows);
           } catch (error) {
-            if (signal?.aborted || error?.name === 'AbortError') throw error;
+            if (signal?.aborted || error?.name === 'AbortError') return;
+            /* a failed district must not drop the ones that already arrived */
           }
         }),
       );
+      if (!cameras.length && signal?.aborted) {
+        const error = new Error('aborted');
+        error.name = 'AbortError';
+        throw error;
+      }
       return clampHits(
         cameras.map((camera) => ({
           id: String(camera.id),
