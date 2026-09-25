@@ -44,6 +44,11 @@ export function createBrowserViteConfig({
         'X-Frame-Options': 'DENY',
         'Content-Security-Policy': "frame-ancestors 'none'",
       },
+      // Transform the entry and the Cesium graph at startup so the first
+      // share link is not waiting on a cold compile. This does not block listen.
+      warmup: {
+        clientFiles: ['./src/main.js', './src/standalone/application.js'],
+      },
     },
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),

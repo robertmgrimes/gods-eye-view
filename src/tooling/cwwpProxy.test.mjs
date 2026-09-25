@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs';
 import { cwwpProxy } from '../../server/providers/cwwp.js';
 import { LIST_CACHE_TTL_MS, stillRefreshMs } from '../layers/cwwp/policy.js';
 
-function install(plugin) {
+function install(plugin = cwwpProxy({ disk: null, warm: false })) {
   const routes = new Map();
-  plugin.configureServer({
+  plugin.configureServer?.({
     middlewares: {
       use(route, handler) {
         routes.set(route, handler);
@@ -91,7 +91,7 @@ test('a view outside California is empty and does not call Caltrans', async (t) 
   t.mock.method(globalThis, 'fetch', () => {
     throw new Error('upstream must not be called');
   });
-  const request = install(cwwpProxy());
+  const request = install();
   const res = await request(
     '/webcams?west=-74.1&south=40.6&east=-73.9&north=40.9',
   );
@@ -148,19 +148,23 @@ test('district files are cached, filtered, and hide still and HLS urls', async (
       return Response.json({ data: [] });
     }),
   );
-  const request = install(cwwpProxy());
+  const request = install();
   const first = await request(LA);
   const second = await request(
     '/webcams?west=-118.6&south=33.8&east=-118.0&north=34.3',
   );
   assert.equal(first.status, 200);
-  assert.equal(calls.length, 12);
+  assert.deepEqual(
+    calls.map((href) => href.match(/cctvStatusD(\d+)\.json/)?.[1]).sort(),
+    ['07', '12'],
+  );
   assert.equal(calls.filter((href) => href.includes('wzmedia')).length, 0);
   assert.ok(
     calls.some((href) => href.endsWith('/data/d7/cctv/cctvStatusD07.json')),
   );
-  assert.ok(
+  assert.equal(
     calls.some((href) => href.endsWith('/data/d10/cctv/cctvStatusD10.json')),
+    false,
   );
   const body = json(first);
   assert.equal(body.coverage, 'view');
@@ -180,7 +184,7 @@ test('district files are cached, filtered, and hide still and HLS urls', async (
   assert.equal(first.body.includes('cwwp2.dot.ca.gov'), false);
   assert.equal(first.body.includes('127.0.0.1'), false);
   assert.equal(json(second).count, 2);
-  assert.equal(calls.length, 12);
+  assert.equal(calls.length, 2);
   const missing = await request('/webcams/d07-9/still');
   assert.equal(missing.status, 404);
   assert.equal(
@@ -233,7 +237,7 @@ test('a still is proxied from the catalog snapshot and ignores a client URL', as
       throw new Error(`unexpected upstream ${href}`);
     }),
   );
-  const request = install(cwwpProxy());
+  const request = install();
   const image = await request(
     '/webcams/d07-1/still?url=https://evil.example/secret.jpg',
   );
@@ -275,7 +279,7 @@ test('a TLS failure is retried and then succeeds', async (t) => {
       return Response.json({ data: [] });
     }),
   );
-  const request = install(cwwpProxy());
+  const request = install();
   const body = json(await request(LA));
   assert.equal(body.count, 1);
   assert.equal(body.cameras[0].id, 'd07-1');
@@ -287,12 +291,12 @@ test('a failed district is omitted and the rest of the catalog is stale', async 
     globalThis,
     'fetch',
     districts((district) => {
-      if (district === 3) throw new TypeError('fetch failed');
+      if (district === 12) throw new TypeError('fetch failed');
       if (district === 7) return Response.json({ data: [record()] });
       return Response.json({ data: [] });
     }),
   );
-  const request = install(cwwpProxy());
+  const request = install();
   const body = json(await request(LA));
   assert.equal(body.stale, true);
   assert.deepEqual(
@@ -324,7 +328,7 @@ test('a slow still waits out its own update frequency', async (t) => {
       return Response.json({ data: [] });
     }),
   );
-  const request = install(cwwpProxy());
+  const request = install();
   assert.equal((await request('/webcams/d07-1/still')).status, 200);
   const imageCalls = () =>
     calls.filter((href) => href.includes('/image/')).length;
@@ -374,7 +378,7 @@ test('warm refreshes only the requested visible ids and limits concurrency', asy
       return Response.json({ data: [] });
     }),
   );
-  const request = install(cwwpProxy());
+  const request = install();
   const warm = await request(
     '/webcams/warm?ids=d07-1,d07-2,d07-3,d07-4,d07-2,nope',
   );
@@ -403,7 +407,7 @@ test('an expired district is reused when Caltrans fails, and a fresh one replace
       return Response.json({ data: [] });
     }),
   );
-  const request = install(cwwpProxy());
+  const request = install();
   assert.equal((await request(LA)).status, 200);
   mode = 'fail';
   now += LIST_CACHE_TTL_MS + 5;

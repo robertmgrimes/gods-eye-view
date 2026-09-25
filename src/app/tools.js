@@ -5,6 +5,7 @@ import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { createWebcamExplorePanel } from '../ui/webcamExplore.js';
 import { createNpsNaturePanel } from '../ui/npsNature.js';
+import { createFindCamerasPanel } from '../ui/findCameras.js';
 import { initGevVoiceCommands } from '../voice/gevRealtime.js';
 import { installScopeMask, destroyScopeMask } from '../scopeMask.js';
 import {
@@ -107,6 +108,17 @@ export function createApplicationTools({
       data.presentation.attachWebcamExplore(null);
     });
   }
+  data.presentation.attachFindCameras((container) =>
+    createFindCamerasPanel({
+      container,
+      viewer,
+      dataManager,
+      placeSearch,
+    }),
+  );
+  defer(() => {
+    data.presentation.attachFindCameras(null);
+  });
   const npsNature = dataManager.layers.get('nps-nature-cameras')?.module;
   if (npsNature) {
     data.presentation.attachNpsNature((container) =>

@@ -1,11 +1,18 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { governorRequestRender } from '../../renderGovernor.js';
 import { imageUrlFresh, windyClientMessage } from './model.js';
 import { createWindyPopover } from './popover.js';
+import {
+  keepSearchHold,
+  rememberSearchCamera,
+  revealScreen,
+} from '../searchHold.js';
 import { LAYER_ID, NEARBY_RADIUS_KM, REQUEST_DEBOUNCE_MS } from './policy.js';
 
 const PIN = Cesium.Color.fromCssColorString('#3ec6ff');
 const PIN_SELECTED = Cesium.Color.fromCssColorString('#ffe08a');
+const PIN_HEIGHT = 80;
 
 function viewCenter(viewer) {
   const canvas = viewer?.scene?.canvas;
@@ -24,6 +31,17 @@ function viewCenter(viewer) {
     lat: Cesium.Math.toDegrees(cartographic.latitude),
     lon: Cesium.Math.toDegrees(cartographic.longitude),
   };
+}
+
+function nearbyRadiusKm(viewer) {
+  const pitch = Number(viewer?.camera?.pitch);
+  if (!Number.isFinite(pitch)) return NEARBY_RADIUS_KM;
+  const fromNadir = Math.PI / 2 + pitch;
+  if (!(fromNadir > 0.08)) return NEARBY_RADIUS_KM;
+  const km = Number(viewer?.camera?.positionCartographic?.height) / 1000;
+  const heightKm = Number.isFinite(km) && km > 0 ? km : NEARBY_RADIUS_KM;
+  const ahead = heightKm * Math.tan(Math.min(fromNadir, 1.05));
+  return Math.min(250, Math.max(NEARBY_RADIUS_KM, Math.ceil(ahead + 5)));
 }
 
 function screenFromClick(viewer, position) {
@@ -120,6 +138,7 @@ export function createWindyWebcamsLayer({ source } = {}) {
       const position = Cesium.Cartesian3.fromDegrees(
         record.longitude,
         record.latitude,
+        PIN_HEIGHT,
       );
       if (!entity) {
         entity = data.entities.add({
@@ -131,7 +150,6 @@ export function createWindyWebcamsLayer({ source } = {}) {
             outlineColor: Cesium.Color.WHITE,
             outlineWidth: 2,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           },
         });
       } else {
@@ -141,6 +159,7 @@ export function createWindyWebcamsLayer({ source } = {}) {
       entity.point.color = selected ? PIN_SELECTED : PIN;
     }
     state.count = data.entities.values.length;
+    governorRequestRender('windy-pins');
   }
 
   function closePopover() {
@@ -272,7 +291,7 @@ export function createWindyWebcamsLayer({ source } = {}) {
       const payload = await source.nearby({
         lat: center.lat,
         lon: center.lon,
-        radiusKm: NEARBY_RADIUS_KM,
+        radiusKm: nearbyRadiusKm(state.viewer),
         signal: request.signal,
       });
       if (request.signal.aborted || state.abort !== request || !state.enabled)
@@ -286,6 +305,7 @@ export function createWindyWebcamsLayer({ source } = {}) {
           Number.isFinite(record.longitude),
       );
       state.byId = new Map(state.records.map((record) => [record.id, record]));
+      keepSearchHold(state);
       if (state.selectedId && !state.byId.has(state.selectedId)) closePopover();
       state.lastUpdate = Number(payload?.fetchedAt) || Date.now();
       state.stale = payload?.stale === true;
@@ -445,6 +465,12 @@ export function createWindyWebcamsLayer({ source } = {}) {
       state.viewer = null;
       state.lastUpdate = null;
       state.count = 0;
+    },
+    revealSearchCamera(record) {
+      if (!state.enabled || !rememberSearchCamera(state, record)) return false;
+      renderPins();
+      openWebcam(record.id, revealScreen(state.viewer));
+      return true;
     },
     setRowControlsListener(listener) {
       state.controlsListener = typeof listener === 'function' ? listener : null;

@@ -6,12 +6,24 @@ import {
   formatTempC,
   formatWind,
 } from './model.js';
+import { claimCameraCard, releaseCameraCard } from '../cameraCards.js';
 
 function el(doc, tag, className, text) {
   const node = doc.createElement(tag);
   if (className) node.className = className;
   if (text != null) node.textContent = text;
   return node;
+}
+
+/** The Windy card is the only place this link belongs. */
+function windyPage(url) {
+  if (typeof url !== 'string' || !url) return false;
+  try {
+    const host = new URL(url).hostname;
+    return host === 'windy.com' || host.endsWith('.windy.com');
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -123,7 +135,7 @@ export function createWindyPopover({
       button('forecast', 'Point forecast'),
     );
     root.append(actions);
-    if (record.detailUrl) {
+    if (windyPage(record.detailUrl)) {
       const link = el(doc, 'a', 'windy-popover-link', 'Open on Windy');
       link.href = record.detailUrl;
       link.target = '_blank';
@@ -210,9 +222,11 @@ export function createWindyPopover({
       if (view?.kind === 'forecast') renderForecast(view);
       else renderWebcam(view || {});
       node.hidden = false;
+      claimCameraCard(this);
       place(view?.screen);
     },
     hide() {
+      releaseCameraCard(this);
       if (root) root.hidden = true;
     },
     destroy() {

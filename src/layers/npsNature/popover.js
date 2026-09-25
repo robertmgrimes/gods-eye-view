@@ -1,3 +1,4 @@
+import { claimCameraCard, releaseCameraCard } from '../cameraCards.js';
 import { sameOriginStillUrl } from './model.js';
 import { CREDIT_NOTE } from './policy.js';
 
@@ -81,8 +82,8 @@ export function createNpsNaturePopover({
       node.replaceChildren();
       node.setAttribute('aria-label', record.name || 'NPS camera');
       node.append(header(record.name || 'NPS camera'));
-      const place = [record.park, record.place].filter(Boolean).join(' · ');
-      if (place) node.append(el(doc, 'p', 'nps-nature-popover-meta', place));
+      const where = [record.park, record.place].filter(Boolean).join(' · ');
+      if (where) node.append(el(doc, 'p', 'nps-nature-popover-meta', where));
       if (record.approximate)
         node.append(
           el(
@@ -151,9 +152,11 @@ export function createNpsNaturePopover({
         actions.append(button('refresh', 'Refresh still'));
       node.append(actions);
       node.hidden = false;
+      claimCameraCard(this);
       place(view.screen);
     },
     hide() {
+      releaseCameraCard(this);
       if (root) root.hidden = true;
     },
     destroy() {

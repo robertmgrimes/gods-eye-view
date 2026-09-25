@@ -1,7 +1,13 @@
 import * as Cesium from 'cesium';
 import { isPointerFree } from '../../data/inputOwnership.js';
+import { governorRequestRender } from '../../renderGovernor.js';
 import { kytcClientMessage, parseBBox, preferLocalQuery } from './model.js';
 import { createKytcPopover } from './popover.js';
+import {
+  keepSearchHold,
+  rememberSearchCamera,
+  revealScreen,
+} from '../searchHold.js';
 import {
   AIM_LABEL,
   EMPTY_IN_VIEW_LABEL,
@@ -16,6 +22,7 @@ import {
 
 const PIN = Cesium.Color.fromCssColorString('#7aa2ff');
 const PIN_SELECTED = Cesium.Color.fromCssColorString('#ffe08a');
+const PIN_HEIGHT = 80;
 
 function viewCenter(viewer) {
   const canvas = viewer?.scene?.canvas;
@@ -52,6 +59,7 @@ function viewQuery(viewer) {
     box,
     viewCenter(viewer),
     viewer?.camera?.positionCartographic?.height,
+    viewer?.camera?.pitch,
   );
 }
 
@@ -226,6 +234,7 @@ export function createKytcWebcamsLayer({ source } = {}) {
       const position = Cesium.Cartesian3.fromDegrees(
         record.longitude,
         record.latitude,
+        PIN_HEIGHT,
       );
       if (!entity) {
         entity = data.entities.add({
@@ -237,7 +246,6 @@ export function createKytcWebcamsLayer({ source } = {}) {
             outlineColor: Cesium.Color.WHITE,
             outlineWidth: 2,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           },
         });
       } else {
@@ -247,6 +255,7 @@ export function createKytcWebcamsLayer({ source } = {}) {
       entity.point.color = selected ? PIN_SELECTED : PIN;
     }
     state.count = data.entities.values.length;
+    governorRequestRender('kytc-pins');
   }
 
   function closePopover() {
@@ -313,6 +322,7 @@ export function createKytcWebcamsLayer({ source } = {}) {
           Number.isFinite(record.longitude),
       );
       state.byId = new Map(state.records.map((record) => [record.id, record]));
+      keepSearchHold(state);
       if (state.selectedId && !state.byId.has(state.selectedId)) closePopover();
       state.lastUpdate = Number(payload?.fetchedAt) || Date.now();
       state.stale = payload?.stale === true;
@@ -437,6 +447,12 @@ export function createKytcWebcamsLayer({ source } = {}) {
       state.viewer = null;
       state.lastUpdate = null;
       state.count = 0;
+    },
+    revealSearchCamera(record) {
+      if (!state.enabled || !rememberSearchCamera(state, record)) return false;
+      renderPins();
+      openCamera(record.id, revealScreen(state.viewer));
+      return true;
     },
     setRowControlsListener(listener) {
       state.controlsListener = typeof listener === 'function' ? listener : null;

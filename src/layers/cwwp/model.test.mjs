@@ -10,6 +10,8 @@ import {
   cameraInQuery,
   camerasForQuery,
   districtStatusUrl,
+  districtsForQuery,
+  groundFootprintKm,
   isAllowedSnapshotUrl,
   normalizeCamera,
   parseBBox,
@@ -243,6 +245,48 @@ test('a whole-globe rectangle falls back to a tight circle around the camera', (
     preferLocalQuery(metro, { lat: 34.05, lon: -118.25 }, 700),
     metro,
   );
+});
+
+test('an oblique Los Angeles view is a capped circle, not the horizon box', () => {
+  const horizon = parseBBox({
+    west: -125,
+    south: 32,
+    east: -114,
+    north: 42,
+  });
+  const pitch = -35 * (Math.PI / 180);
+  const query = preferLocalQuery(
+    horizon,
+    { lat: 34.05, lon: -118.24 },
+    40000,
+    pitch,
+  );
+  assert.equal(query.kind, 'nearby');
+  assert.equal(query.lat, 34.05);
+  assert.equal(query.lon, -118.24);
+  assert.ok(query.radiusKm <= 50);
+  assert.equal(groundFootprintKm(40000, pitch), query.radiusKm);
+  const districts = districtsForQuery(query);
+  assert.ok(districts.includes(7));
+  assert.ok(!districts.includes(3));
+  assert.ok(!districts.includes(4));
+  assert.ok(districts.length < 12);
+  const nadir = preferLocalQuery(
+    parseBBox({ west: -118.5, south: 33.9, east: -118.1, north: 34.2 }),
+    { lat: 34.05, lon: -118.24 },
+    40000,
+    -89 * (Math.PI / 180),
+  );
+  assert.equal(nadir.kind, 'bbox');
+});
+
+test('Sacramento search only needs the nearby Caltrans districts', () => {
+  const query = parseNearby({ lat: 38.58, lon: -121.49, radiusKm: 40 });
+  const districts = districtsForQuery(query);
+  assert.ok(districts.includes(3));
+  assert.ok(!districts.includes(7));
+  assert.ok(!districts.includes(11));
+  assert.ok(districts.length <= 4);
 });
 
 test('the Caltrans layer share hash round-trips on the unused token 5', () => {

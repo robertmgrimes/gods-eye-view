@@ -8,6 +8,11 @@ import { governorRequestRender } from '../../renderGovernor.js';
 import { isCameraId } from './model.js';
 import { createNpsNaturePopover } from './popover.js';
 import {
+  keepSearchHold,
+  rememberSearchCamera,
+  revealScreen,
+} from '../searchHold.js';
+import {
   LAYER_ID,
   LAYER_INFO,
   LAYER_SOURCE,
@@ -257,6 +262,7 @@ export function createNpsNatureLayer({ source } = {}) {
           .filter((record) => isCameraId(record?.id))
           .map((record) => [record.id, record]),
       );
+      keepSearchHold(state);
       if (state.selectedId && !state.byId.has(state.selectedId)) closePopover();
       state.lastUpdate = Number(payload?.fetchedAt) || Date.now();
       renderPins();
@@ -374,6 +380,12 @@ export function createNpsNatureLayer({ source } = {}) {
       if (typeof listener !== 'function') return () => {};
       state.listeners.add(listener);
       return () => state.listeners.delete(listener);
+    },
+    revealSearchCamera(record) {
+      if (!state.enabled || !rememberSearchCamera(state, record)) return false;
+      renderPins();
+      openCamera(record.id, revealScreen(state.viewer));
+      return true;
     },
     setRowControlsListener(listener) {
       state.controlsListener = typeof listener === 'function' ? listener : null;

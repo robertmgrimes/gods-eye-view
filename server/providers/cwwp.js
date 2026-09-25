@@ -5,6 +5,7 @@ import {
 } from './common/http.js';
 import {
   camerasForQuery,
+  districtsForQuery,
   districtStatusUrl,
   extractCctvRecords,
   isAllowedSnapshotUrl,
@@ -18,6 +19,7 @@ import {
 import {
   DISTRICT_FETCH_CONCURRENCY,
   DISTRICT_JSON_MAX_BYTES,
+  DISTRICT_WARM_CONCURRENCY,
   DISTRICTS,
   DISTRICT_FAIL_RETRY_MS,
   LIST_CACHE_TTL_MS,
@@ -26,6 +28,14 @@ import {
   UPSTREAM_ATTEMPTS,
   stillRefreshMs,
 } from '../../src/layers/cwwp/policy.js';
+import path from 'node:path';
+import {
+  CWWP_DISK_DIR,
+  CWWP_UNDER_TEST,
+  createCwwpDiskCache,
+} from './cwwpDiskCache.js';
+
+const REAL_FETCH = globalThis.fetch;
 
 const IMAGE_TYPES = new Set([
   'image/jpeg',
@@ -54,7 +64,19 @@ const RETRY_STATUSES = new Set([429, 502, 503, 504]);
  *
  * @returns {import('vite').Plugin}
  */
-export function cwwpProxy() {
+export function cwwpProxy({
+  disk = CWWP_UNDER_TEST ? null : createCwwpDiskCache(),
+  warm = !CWWP_UNDER_TEST,
+} = {}) {
+  if (
+    CWWP_UNDER_TEST &&
+    disk?.dir &&
+    path.resolve(disk.dir) === path.resolve(CWWP_DISK_DIR)
+  ) {
+    throw new Error(
+      `tests must not use the real Caltrans cache at ${CWWP_DISK_DIR}`,
+    );
+  }
   /** @type {Map<number, { at: number, stale: boolean, failed: boolean, cameras: object[] }>} */
   const districts = new Map();
   /** @type {Map<string, { at: number, bytes: Uint8Array | null, contentType: string, kept?: boolean }>} */
@@ -150,6 +172,9 @@ export function cwwpProxy() {
   }
 
   async function fetchDistrict(district) {
+    if (CWWP_UNDER_TEST && globalThis.fetch === REAL_FETCH) {
+      throw new Error('Caltrans tests must not reach the live feed');
+    }
     const response = await fetchUpstream(districtStatusUrl(district), {
       accept: 'application/json',
       'user-agent': 'gods-eye-view-cwwp/1.0',
@@ -166,53 +191,89 @@ export function cwwpProxy() {
     return cameras;
   }
 
+  function remember(district, entry) {
+    districts.set(district, entry);
+    return entry;
+  }
+
+  function freshEnough(entry) {
+    return entry && !entry.failed && Date.now() - entry.at < LIST_CACHE_TTL_MS;
+  }
+
+  async function storeFresh(district, cameras) {
+    const entry = {
+      at: Date.now(),
+      stale: false,
+      failed: false,
+      cameras,
+    };
+    remember(district, entry);
+    if (disk) await disk.write(district, cameras, entry.at).catch(() => {});
+    return entry;
+  }
+
+  function refreshInBackground(district) {
+    coalesceProxyRequest(districtInflight, String(district), async () => {
+      const cameras = await fetchDistrict(district);
+      return storeFresh(district, cameras);
+    }).promise.catch(() => {});
+  }
+
   async function loadDistrict(district) {
     const cached = districts.get(district);
-    if (cached && !cached.failed && Date.now() - cached.at < LIST_CACHE_TTL_MS)
-      return cached;
+    if (freshEnough(cached)) return cached;
     if (cached?.failed && Date.now() - cached.at < DISTRICT_FAIL_RETRY_MS)
       return cached;
+    const diskHit = disk ? await disk.read(district).catch(() => null) : null;
+    if (diskHit?.cameras) {
+      const entry = remember(district, {
+        at: diskHit.at,
+        stale: Date.now() - diskHit.at >= LIST_CACHE_TTL_MS,
+        failed: false,
+        cameras: diskHit.cameras,
+      });
+      if (entry.stale) refreshInBackground(district);
+      return entry;
+    }
     try {
       const { promise } = coalesceProxyRequest(
         districtInflight,
         String(district),
         async () => {
           const cameras = await fetchDistrict(district);
-          const entry = {
-            at: Date.now(),
-            stale: false,
-            failed: false,
-            cameras,
-          };
-          districts.set(district, entry);
-          return entry;
+          return storeFresh(district, cameras);
         },
       );
       return await promise;
     } catch {
       if (cached?.cameras?.length) {
-        const kept = {
+        return remember(district, {
           at: Date.now(),
           stale: true,
           failed: false,
           cameras: cached.cameras,
-        };
-        districts.set(district, kept);
-        return kept;
+        });
       }
-      const failed = {
+      return remember(district, {
         at: Date.now(),
         stale: true,
         failed: true,
         cameras: [],
-      };
-      districts.set(district, failed);
-      return failed;
+      });
     }
   }
 
-  async function loadCatalog() {
-    await runPool(DISTRICTS, DISTRICT_FETCH_CONCURRENCY, (district) =>
+  function warmDistricts() {
+    runPool(DISTRICTS, DISTRICT_WARM_CONCURRENCY, (district) =>
+      loadDistrict(district),
+    ).catch(() => {});
+  }
+
+  async function loadCatalog(wanted = DISTRICTS) {
+    const list = (Array.isArray(wanted) ? wanted : DISTRICTS).filter((n) =>
+      DISTRICTS.includes(n),
+    );
+    await runPool(list, DISTRICT_FETCH_CONCURRENCY, (district) =>
       loadDistrict(district),
     );
     const cameras = [];
@@ -220,7 +281,7 @@ export function cwwpProxy() {
     let stale = false;
     let any = false;
     const times = [];
-    for (const district of DISTRICTS) {
+    for (const district of list) {
       const entry = districts.get(district);
       if (!entry || entry.failed || entry.stale) stale = true;
       if (entry?.cameras?.length) any = true;
@@ -380,8 +441,23 @@ export function cwwpProxy() {
     await Promise.all(Array.from({ length: lanes }, () => lane()));
   }
 
+  function districtNumber(id) {
+    const match = /^d(0[1-9]|1[0-2])-/.exec(String(id || ''));
+    return match ? Number(match[1]) : null;
+  }
+
+  function districtsForRequest(query, searchParams) {
+    const intersecting = districtsForQuery(query);
+    if (!searchParams?.has?.('district')) return intersecting;
+    const n = Number(searchParams.get('district'));
+    return intersecting.includes(n) ? [n] : [];
+  }
+
   async function warmStills(ids) {
-    const entry = await loadCatalog();
+    const wanted = [
+      ...new Set(ids.map((id) => districtNumber(id)).filter(Boolean)),
+    ];
+    const entry = await loadCatalog(wanted);
     retainVisibleStills(ids, entry.cameras);
     const targets = ids
       .map((id) => entry.cameras.find((row) => row.id === id))
@@ -445,7 +521,18 @@ export function cwwpProxy() {
             });
             return;
           }
-          const entry = await loadCatalog();
+          const wanted = districtsForRequest(query, url.searchParams);
+          if (!wanted.length) {
+            sendJson(res, 200, {
+              fetchedAt: Date.now(),
+              stale: false,
+              coverage: 'view',
+              count: 0,
+              cameras: [],
+            });
+            return;
+          }
+          const entry = await loadCatalog(wanted);
           const cameras = camerasForQuery(entry.cameras, query)
             .map(publicCamera)
             .filter(Boolean);
@@ -471,7 +558,7 @@ export function cwwpProxy() {
           /^\/webcams\/(d(?:0[1-9]|1[0-2])-\d{1,6})\/still$/,
         );
         if (still && isCameraId(still[1])) {
-          const entry = await loadCatalog();
+          const entry = await loadCatalog([districtNumber(still[1])]);
           const camera = entry.cameras.find((row) => row.id === still[1]);
           if (!camera?.snapshot) {
             sendJson(res, 404, { error: 'not_found' });
@@ -493,7 +580,13 @@ export function cwwpProxy() {
 
   return {
     name: 'cwwp-proxy',
-    configureServer: installMiddleware,
-    configurePreviewServer: installMiddleware,
+    configureServer(server) {
+      installMiddleware(server);
+      if (warm) warmDistricts();
+    },
+    configurePreviewServer(server) {
+      installMiddleware(server);
+      if (warm) warmDistricts();
+    },
   };
 }
