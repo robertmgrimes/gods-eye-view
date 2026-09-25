@@ -573,6 +573,11 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
     disposition: 'enabled+options',
     optionOwner: 'wind',
   }),
+  Object.freeze({
+    id: 'windy-webcams',
+    token: '3',
+    disposition: 'enabled-only',
+  }),
 ]);
 
 export const REGISTERED_LAYER_IDS = Object.freeze(

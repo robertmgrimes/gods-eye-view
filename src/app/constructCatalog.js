@@ -9,6 +9,7 @@ import { createApplicationFlights } from './layers/flights.js';
 import { createApplicationMilitary } from './layers/militaryFlights.js';
 import { createApplicationVessels } from './layers/aisLiveVessels.js';
 import { createApplicationCctv } from './layers/cctv.js';
+import { createApplicationWindyWebcams } from './layers/windyWebcams.js';
 import { createApplicationRadio } from './layers/radio.js';
 import { createApplicationTraffic } from './layers/traffic.js';
 import { createApplicationBikeshare } from './layers/bikeshare.js';
@@ -35,6 +36,7 @@ const SOURCE_METHODS = Object.freeze({
   military: ['getSnapshot'],
   vessels: ['getSnapshot'],
   cctv: ['getCatalog', 'getHealth', 'getFrameUrl', 'getMediaUrl'],
+  windyWebcams: ['nearby', 'detail', 'forecast'],
   radio: ['getDirectory', 'recordClick'],
   traffic: [
     'requestRoads',
@@ -152,6 +154,7 @@ export function createApplicationCatalog({
         createApplicationLaunches({ source: sources.launches, satellites }),
         createApplicationTraffic({ source: sources.traffic }),
         createApplicationCctv({ surface, source: sources.cctv }),
+        createApplicationWindyWebcams({ source: sources.windyWebcams }),
         createApplicationRadio({ surface, source: sources.radio }),
         createApplicationTransit({ surface, source: sources.transit }),
         createApplicationBikeshare({ source: sources.bikeshare }),

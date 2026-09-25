@@ -14,7 +14,7 @@
 /** Longest accepted key/token value. Real provider keys are all far shorter. */
 export const KEY_SETUP_VALUE_LIMIT = 512;
 
-/** Most env vars accepted in one save. The registry defines ten. */
+/** Most env vars accepted in one save. The registry defines eleven. */
 export const KEY_SETUP_UPDATE_LIMIT = 16;
 
 /** Header line written above keys the panel appends to a .env file. */
@@ -71,6 +71,22 @@ export const KEY_SETUP_KEYS = Object.freeze([
     unlocks: 'Live active-fire detections',
     getUrl: 'https://firms.modaps.eosdis.nasa.gov/api/map_key/',
     envVars: Object.freeze(['FIRMS_MAP_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'windy-webcams',
+    title: 'WINDY WEBCAMS',
+    unlocks: 'Nearby webcam stills on the globe',
+    getUrl: 'https://api.windy.com/keys',
+    envVars: Object.freeze(['WINDY_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'windy-point-forecast',
+    title: 'WINDY POINT FORECAST',
+    unlocks: 'Click a point for a temp and wind forecast (testing data)',
+    getUrl: 'https://api.windy.com/keys',
+    envVars: Object.freeze(['WINDY_POINT_FORECAST_API_KEY']),
     tier: 'free',
   }),
   Object.freeze({

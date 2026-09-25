@@ -4,6 +4,7 @@ import {
   createAisStreamSource,
 } from '../sources/live/standalone.js';
 import { createCctvSource } from '../layers/cctv/source.js';
+import { createWindySource } from '../layers/windy/source.js';
 import { createRadioSource } from '../layers/radio/source.js';
 import { createTransitSource } from '../layers/transit/source.js';
 import { createTrafficSource } from '../layers/traffic/source.js';
@@ -29,6 +30,7 @@ export function createStandaloneLayerSources() {
       apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/ais-live',
     }),
     cctv: createCctvSource(),
+    windyWebcams: createWindySource(),
     radio: createRadioSource(),
     traffic: createTrafficSource(),
     transit: createTransitSource(),

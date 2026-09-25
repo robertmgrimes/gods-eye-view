@@ -18,6 +18,8 @@ export const CREDENTIALS = Object.freeze([
   { name: 'OPENAI_API_KEY', label: 'OpenAI voice', keychain: [['openai-api', 'api-key']] },
   { name: 'AISSTREAM_API_KEY', label: 'AISStream vessels', keychain: [['aisstream-api', 'api-key']] },
   { name: 'FIRMS_MAP_KEY', label: 'NASA FIRMS fires', keychain: [['firms-map', 'map-key']] },
+  { name: 'WINDY_API_KEY', label: 'Windy webcams', keychain: [['windy-webcams', 'api-key']] },
+  { name: 'WINDY_POINT_FORECAST_API_KEY', label: 'Windy point forecast', keychain: [['windy-point-forecast', 'api-key']] },
   { name: 'TOMTOM_API_KEY', label: 'TomTom traffic', keychain: [['tomtom-api', 'api-key']] },
   {
     name: 'OPENSKY_CLIENT_ID',
@@ -178,6 +180,10 @@ export function buildCapabilitySummary(
     voice: configured('OPENAI_API_KEY') ? 'available' : 'off until an OpenAI key is added',
     vessels: configured('AISSTREAM_API_KEY') ? 'live AISStream feed' : 'off until an AISStream key is added',
     fires: configured('FIRMS_MAP_KEY') ? 'live NASA FIRMS feed' : 'off until a FIRMS key is added',
+    webcams: configured('WINDY_API_KEY') ? 'Windy webcam stills' : 'off until a Windy webcams key is added',
+    pointForecast: configured('WINDY_POINT_FORECAST_API_KEY')
+      ? 'Windy point forecast (testing tier may alter values)'
+      : 'off until a Windy point-forecast key is added',
     traffic: configured('TOMTOM_API_KEY') ? 'live TomTom flow' : 'built-in traffic simulation',
     missions: configured('LL2_API_TOKEN')
       ? 'Launch Library 2 token allowance'
@@ -235,6 +241,8 @@ export function formatSetupReport(report, { readyMessage } = {}) {
     `Voice:   ${report.capabilities.voice}`,
     `Vessels: ${report.capabilities.vessels}`,
     `Fires:   ${report.capabilities.fires}`,
+    `Webcams: ${report.capabilities.webcams}`,
+    `Forecast: ${report.capabilities.pointForecast}`,
     `Traffic: ${report.capabilities.traffic}`,
     `Missions: ${report.capabilities.missions}`,
     '',
