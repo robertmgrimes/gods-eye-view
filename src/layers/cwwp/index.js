@@ -3,6 +3,7 @@ import { isPointerFree } from '../../data/inputOwnership.js';
 import { governorRequestRender } from '../../renderGovernor.js';
 import {
   cwwpClientMessage,
+  districtsForQuery,
   isCameraId,
   parseBBox,
   preferLocalQuery,
@@ -400,36 +401,64 @@ export function createCwwpWebcamsLayer({ source } = {}) {
     state.abort = request;
     state.loading = true;
     setStatus('loading', null);
-    try {
-      const payload = await source.cameras(query, { signal: request.signal });
+    const districts = districtsForQuery(query);
+    const jobs = districts.length ? districts : [null];
+    const merged = new Map();
+    let sawSuccess = false;
+    let sawFailure = false;
+    const take = (payload) => {
       if (request.signal.aborted || state.abort !== request || !state.enabled)
         return;
       const records = Array.isArray(payload?.cameras) ? payload.cameras : [];
       state.lastUpdate = Number(payload?.fetchedAt) || Date.now();
-      state.stale = payload?.stale === true;
+      state.stale = state.stale || payload?.stale === true;
       state.emptyLabel =
         payload?.coverage === 'outside'
           ? EMPTY_OUTSIDE_LABEL
           : EMPTY_IN_VIEW_LABEL;
-      const candidates = records.filter(
-        (record) =>
-          record &&
-          isCameraId(record.id) &&
-          Number.isFinite(record.latitude) &&
-          Number.isFinite(record.longitude),
-      );
+      for (const record of records) {
+        if (
+          !record ||
+          !isCameraId(record.id) ||
+          !Number.isFinite(record.latitude) ||
+          !Number.isFinite(record.longitude)
+        )
+          continue;
+        merged.set(record.id, record);
+      }
+      const candidates = [...merged.values()];
       state.pendingCandidates = candidates;
       publishVisible(candidates, { final: false });
+      sawSuccess = true;
+      state.loading = false;
+      notify();
       warmVisible();
-    } catch (error) {
-      if (
-        error?.name === 'AbortError' ||
-        request.signal.aborted ||
-        state.abort !== request ||
-        !state.enabled
-      )
+    };
+    try {
+      await Promise.all(
+        jobs.map(async (district) => {
+          const next = district == null ? query : { ...query, district };
+          try {
+            const payload = await source.cameras(next, {
+              signal: request.signal,
+            });
+            take(payload);
+          } catch (error) {
+            if (
+              error?.name === 'AbortError' ||
+              request.signal.aborted ||
+              state.abort !== request ||
+              !state.enabled
+            )
+              return;
+            sawFailure = true;
+          }
+        }),
+      );
+      if (request.signal.aborted || state.abort !== request || !state.enabled)
         return;
-      setStatus('unavailable', cwwpClientMessage(error.code));
+      if (!sawSuccess && sawFailure)
+        setStatus('unavailable', cwwpClientMessage('upstream'));
     } finally {
       if (state.abort === request) {
         state.abort = null;

@@ -1,4 +1,11 @@
-import { MAX_CAMERAS, NEARBY_RADIUS_KM, SERVICE_BOUNDS } from './policy.js';
+import {
+  DISTRICT_BOUNDS,
+  DISTRICTS,
+  GROUND_FOOTPRINT_CAP_KM,
+  MAX_CAMERAS,
+  NEARBY_RADIUS_KM,
+  SERVICE_BOUNDS,
+} from './policy.js';
 
 const VIDEO_PATH =
   /\.(?:m3u8|mp4|m4s|ts|mpd)(?:$|[?#])|\/hls(?:\/|$)|playlist/i;
@@ -274,7 +281,36 @@ export function viewBoxIsBroad(box) {
  * camera settles and while the ellipsoid is hidden, so that case uses a
  * height-scaled circle around the ground center.
  */
+/**
+ * Radius around the look-at for a tilted camera. Near nadir the view
+ * rectangle is the ground footprint. Once the camera tilts, Cesium's
+ * rectangle runs out to the horizon, so the fetch uses a capped circle
+ * instead of that rectangle.
+ */
+export function groundFootprintKm(heightMeters, pitchRadians) {
+  const pitch = Number(pitchRadians);
+  if (!Number.isFinite(pitch)) return null;
+  const fromNadir = Math.PI / 2 + pitch;
+  if (!(fromNadir > 0.2)) return null;
+  const heightKm = Number(heightMeters) / 1000;
+  const base = Number.isFinite(heightKm) && heightKm > 0 ? heightKm : 40;
+  return Math.min(GROUND_FOOTPRINT_CAP_KM, Math.max(12, Math.round(base)));
+}
+
 export function preferLocalQuery(box, center, heightMeters, pitchRadians) {
+  const footprint = groundFootprintKm(heightMeters, pitchRadians);
+  if (
+    footprint &&
+    center &&
+    Number.isFinite(center.lat) &&
+    Number.isFinite(center.lon)
+  ) {
+    return parseNearby({
+      lat: center.lat,
+      lon: center.lon,
+      radiusKm: footprint,
+    });
+  }
   if (box && !viewBoxIsBroad(box)) return box;
   if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lon))
     return null;
@@ -283,6 +319,35 @@ export function preferLocalQuery(box, center, heightMeters, pitchRadians) {
     lon: center.lon,
     radiusKm: nearbyRadiusForHeight(heightMeters, pitchRadians),
   });
+}
+
+function queryEnvelope(query) {
+  if (!query) return null;
+  if (query.kind === 'bbox') return query;
+  const latPad = query.radiusKm / 111;
+  const lonScale = Math.max(0.2, Math.cos((query.lat * Math.PI) / 180));
+  const lonPad = query.radiusKm / (111 * lonScale);
+  return {
+    south: query.lat - latPad,
+    north: query.lat + latPad,
+    west: query.lon - lonPad,
+    east: query.lon + lonPad,
+  };
+}
+
+function boxesOverlap(a, b) {
+  if (!a || !b) return false;
+  if (a.north < b.south || a.south > b.north) return false;
+  return a.east >= b.west && a.west <= b.east;
+}
+
+/** District files whose cameras can fall inside the query. */
+export function districtsForQuery(query) {
+  if (!queryIntersectsService(query)) return [];
+  const envelope = queryEnvelope(query);
+  return DISTRICTS.filter((district) =>
+    boxesOverlap(envelope, DISTRICT_BOUNDS[district]),
+  );
 }
 
 export function pointInBBox(lat, lon, box) {

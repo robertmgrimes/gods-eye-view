@@ -81,8 +81,8 @@ export function createNpsNaturePopover({
       node.replaceChildren();
       node.setAttribute('aria-label', record.name || 'NPS camera');
       node.append(header(record.name || 'NPS camera'));
-      const place = [record.park, record.place].filter(Boolean).join(' · ');
-      if (place) node.append(el(doc, 'p', 'nps-nature-popover-meta', place));
+      const where = [record.park, record.place].filter(Boolean).join(' · ');
+      if (where) node.append(el(doc, 'p', 'nps-nature-popover-meta', where));
       if (record.approximate)
         node.append(
           el(

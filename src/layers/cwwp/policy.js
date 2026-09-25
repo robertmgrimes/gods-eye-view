@@ -55,6 +55,29 @@ export const UPSTREAM_ATTEMPTS = 3;
 
 export const DISTRICTS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
 
+/**
+ * In-service camera extents measured from each district file, padded so a
+ * camera on the district edge still selects that file. A view fetches only
+ * the districts that intersect it.
+ */
+export const DISTRICT_BOUNDS = Object.freeze({
+  1: { south: 38.55, west: -124.4, north: 42.2, east: -122.4 },
+  2: { south: 39.55, west: -123.2, north: 42.2, east: -119.85 },
+  3: { south: 37.9, west: -122.35, north: 40.0, east: -119.75 },
+  4: { south: 36.7, west: -123.0, north: 38.75, east: -121.3 },
+  5: { south: 34.2, west: -122.25, north: 37.35, east: -119.3 },
+  6: { south: 34.6, west: -120.95, north: 37.55, east: -118.6 },
+  7: { south: 33.55, west: -119.5, north: 35.0, east: -117.5 },
+  8: { south: 33.25, west: -117.95, north: 35.8, east: -114.35 },
+  9: { south: 34.8, west: -119.65, north: 38.55, east: -117.65 },
+  10: { south: 36.8, west: -121.9, north: 38.6, east: -119.75 },
+  11: { south: 32.35, west: -117.6, north: 33.55, east: -115.3 },
+  12: { south: 33.2, west: -118.3, north: 34.15, east: -117.4 },
+});
+
+/** Oblique views stay inside this radius instead of the horizon rectangle. */
+export const GROUND_FOOTPRINT_CAP_KM = 50;
+
 export const EMPTY_IN_VIEW_LABEL = 'No Caltrans cameras in this view';
 export const EMPTY_OUTSIDE_LABEL = 'No Caltrans cameras in this view';
 export const LAYER_INFO = 'Caltrans CWWP · California traffic camera stills';

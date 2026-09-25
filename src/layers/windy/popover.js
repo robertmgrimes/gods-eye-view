@@ -14,6 +14,17 @@ function el(doc, tag, className, text) {
   return node;
 }
 
+/** The Windy card is the only place this link belongs. */
+function windyPage(url) {
+  if (typeof url !== 'string' || !url) return false;
+  try {
+    const host = new URL(url).hostname;
+    return host === 'windy.com' || host.endsWith('.windy.com');
+  } catch {
+    return false;
+  }
+}
+
 /**
  * One glass card for a webcam still or a point forecast. API text is assigned
  * with textContent. Image addresses are HTTPS stills the proxy already checked.
@@ -123,7 +134,7 @@ export function createWindyPopover({
       button('forecast', 'Point forecast'),
     );
     root.append(actions);
-    if (record.detailUrl) {
+    if (windyPage(record.detailUrl)) {
       const link = el(doc, 'a', 'windy-popover-link', 'Open on Windy');
       link.href = record.detailUrl;
       link.target = '_blank';

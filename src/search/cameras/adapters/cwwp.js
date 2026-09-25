@@ -1,4 +1,5 @@
 import { createCwwpSource } from '../../../layers/cwwp/source.js';
+import { districtsForQuery, parseNearby } from '../../../layers/cwwp/model.js';
 import { clampHits } from './shared.js';
 
 /** Caltrans CWWP stills. No key. */
@@ -11,11 +12,27 @@ export function createCwwpAdapter({ source = createCwwpSource() } = {}) {
       return true;
     },
     async searchNear({ lat, lon, radiusKm, limit, signal } = {}) {
-      const payload = await source.cameras(
-        { kind: 'nearby', lat, lon, radiusKm },
-        { signal },
+      const query = parseNearby({ lat, lon, radiusKm }) || {
+        kind: 'nearby',
+        lat,
+        lon,
+        radiusKm,
+      };
+      const districts = districtsForQuery(query);
+      const jobs = districts.length ? districts : [null];
+      const cameras = [];
+      await Promise.all(
+        jobs.map(async (district) => {
+          const next = district == null ? query : { ...query, district };
+          try {
+            const payload = await source.cameras(next, { signal });
+            const rows = Array.isArray(payload?.cameras) ? payload.cameras : [];
+            cameras.push(...rows);
+          } catch (error) {
+            if (signal?.aborted || error?.name === 'AbortError') throw error;
+          }
+        }),
       );
-      const cameras = Array.isArray(payload?.cameras) ? payload.cameras : [];
       return clampHits(
         cameras.map((camera) => ({
           id: String(camera.id),

@@ -43,11 +43,15 @@ export function createCwwpSource({
         params.set('lat', String(query.lat));
         params.set('lon', String(query.lon));
         params.set('radiusKm', String(query.radiusKm));
+        if (query.district != null)
+          params.set('district', String(query.district));
       } else {
         params.set('west', String(query.west));
         params.set('south', String(query.south));
         params.set('east', String(query.east));
         params.set('north', String(query.north));
+        if (query.district != null)
+          params.set('district', String(query.district));
       }
       return get(`/api/cwwp/webcams?${params}`, signal);
     },

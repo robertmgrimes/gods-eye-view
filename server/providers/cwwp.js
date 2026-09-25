@@ -5,6 +5,7 @@ import {
 } from './common/http.js';
 import {
   camerasForQuery,
+  districtsForQuery,
   districtStatusUrl,
   extractCctvRecords,
   isAllowedSnapshotUrl,
@@ -211,8 +212,11 @@ export function cwwpProxy() {
     }
   }
 
-  async function loadCatalog() {
-    await runPool(DISTRICTS, DISTRICT_FETCH_CONCURRENCY, (district) =>
+  async function loadCatalog(wanted = DISTRICTS) {
+    const list = (Array.isArray(wanted) ? wanted : DISTRICTS).filter((n) =>
+      DISTRICTS.includes(n),
+    );
+    await runPool(list, DISTRICT_FETCH_CONCURRENCY, (district) =>
       loadDistrict(district),
     );
     const cameras = [];
@@ -220,7 +224,7 @@ export function cwwpProxy() {
     let stale = false;
     let any = false;
     const times = [];
-    for (const district of DISTRICTS) {
+    for (const district of list) {
       const entry = districts.get(district);
       if (!entry || entry.failed || entry.stale) stale = true;
       if (entry?.cameras?.length) any = true;
@@ -380,8 +384,23 @@ export function cwwpProxy() {
     await Promise.all(Array.from({ length: lanes }, () => lane()));
   }
 
+  function districtNumber(id) {
+    const match = /^d(0[1-9]|1[0-2])-/.exec(String(id || ''));
+    return match ? Number(match[1]) : null;
+  }
+
+  function districtsForRequest(query, searchParams) {
+    const intersecting = districtsForQuery(query);
+    if (!searchParams?.has?.('district')) return intersecting;
+    const n = Number(searchParams.get('district'));
+    return intersecting.includes(n) ? [n] : [];
+  }
+
   async function warmStills(ids) {
-    const entry = await loadCatalog();
+    const wanted = [
+      ...new Set(ids.map((id) => districtNumber(id)).filter(Boolean)),
+    ];
+    const entry = await loadCatalog(wanted);
     retainVisibleStills(ids, entry.cameras);
     const targets = ids
       .map((id) => entry.cameras.find((row) => row.id === id))
@@ -445,7 +464,18 @@ export function cwwpProxy() {
             });
             return;
           }
-          const entry = await loadCatalog();
+          const wanted = districtsForRequest(query, url.searchParams);
+          if (!wanted.length) {
+            sendJson(res, 200, {
+              fetchedAt: Date.now(),
+              stale: false,
+              coverage: 'view',
+              count: 0,
+              cameras: [],
+            });
+            return;
+          }
+          const entry = await loadCatalog(wanted);
           const cameras = camerasForQuery(entry.cameras, query)
             .map(publicCamera)
             .filter(Boolean);
@@ -471,7 +501,7 @@ export function cwwpProxy() {
           /^\/webcams\/(d(?:0[1-9]|1[0-2])-\d{1,6})\/still$/,
         );
         if (still && isCameraId(still[1])) {
-          const entry = await loadCatalog();
+          const entry = await loadCatalog([districtNumber(still[1])]);
           const camera = entry.cameras.find((row) => row.id === still[1]);
           if (!camera?.snapshot) {
             sendJson(res, 404, { error: 'not_found' });

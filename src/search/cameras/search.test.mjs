@@ -9,6 +9,7 @@ import {
   createWsdotAdapter,
 } from './adapters/futureDot.js';
 import { createCameraSearchRegistry } from './index.js';
+import { createCwwpAdapter } from './adapters/cwwp.js';
 
 test('distance sort is nearest first and keeps ties in incoming order', () => {
   const origin = { lat: 38.58, lon: -121.49 };
@@ -218,4 +219,36 @@ test('name-only matches stay in the By name section', async () => {
     result.statuses.find((row) => row.id === 'webcam-explore').status,
     'ok',
   );
+});
+
+test('Sacramento search returns Caltrans rows from the nearby districts', async () => {
+  const calls = [];
+  const adapter = createCwwpAdapter({
+    source: {
+      async cameras(query) {
+        calls.push(query.district ?? null);
+        if (query.district !== 3) return { cameras: [] };
+        return {
+          cameras: [
+            {
+              id: 'd03-9',
+              title: 'US 50 at Sacramento',
+              latitude: 38.58,
+              longitude: -121.49,
+              stillUrl: '/api/cwwp/webcams/d03-9/still',
+            },
+          ],
+        };
+      },
+    },
+  });
+  const result = await searchCameras(
+    { adapters: [adapter] },
+    { lat: 38.58, lon: -121.49, query: 'Sacramento' },
+  );
+  assert.ok(calls.includes(3));
+  assert.ok(!calls.includes(7));
+  assert.equal(result.near[0]?.source, 'cwwp');
+  assert.equal(result.near[0]?.name, 'US 50 at Sacramento');
+  assert.equal(result.statuses.find((row) => row.id === 'cwwp').status, 'ok');
 });
